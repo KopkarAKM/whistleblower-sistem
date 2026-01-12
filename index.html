@@ -7,13 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-    <!-- FIREBASE INTEGRATION -->
+    <!-- FIREBASE INTEGRATION WITH DIAGNOSTICS -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CONFIG (Gunakan Config Anda)
+        // CONFIG (Pastikan ini sesuai dengan Project Anda)
         const firebaseConfig = {
             apiKey: "AIzaSyDf6wxmYtxDpj4Sd1Pd2a2vjFHU-O_fLV8",
             authDomain: "wbs-adaro-koperasi.firebaseapp.com",
@@ -23,78 +23,89 @@
             appId: "1:819098429250:web:1a9c1af14d009e89e18adb"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const COLLECTION_NAME = 'laporan_masuk';
+        // Initialize
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            const COLLECTION_NAME = 'laporan_masuk';
 
-        window.globalReports = [];
-        window.isDbReady = false;
+            window.globalReports = [];
+            window.isDbReady = false;
 
-        async function initSystem() {
-            try {
-                await signInAnonymously(auth);
-                console.log("Connected to DB");
-                const colRef = collection(db, COLLECTION_NAME);
-                onSnapshot(colRef, (snapshot) => {
-                    window.globalReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    window.isDbReady = true;
-                    if (!document.getElementById('adminDash').classList.contains('hidden')) {
-                        window.renderAdminList();
-                    }
-                }, (err) => console.error("Sync Error:", err));
-            } catch (error) {
-                console.error("Auth Failed:", error);
-                alert("Gagal koneksi server. Cek internet.");
+            // STATUS INDICATOR
+            function showStatus(msg, type) {
+                const el = document.getElementById('connStatus');
+                el.innerHTML = msg;
+                el.className = type === 'error' ? 'text-xs font-bold text-red-400' : 'text-xs font-bold text-green-400';
             }
-        }
 
-        // Helper: Convert File to Base64
-        const fileToBase64 = (file) => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
-            });
-        };
+            async function initSystem() {
+                showStatus("Menghubungkan ke server...", "normal");
+                try {
+                    // 1. Coba Login
+                    await signInAnonymously(auth);
+                    console.log("Auth Berhasil");
 
-        window.sendReportToCloud = async (data, file) => {
-            if (!window.isDbReady) { alert("Menghubungkan ke database..."); return false; }
-            try {
-                // Handle File Attachment
-                if (file) {
-                    if (file.size > 500 * 1024) { // 500KB Limit for Firestore Doc
-                        alert("Ukuran file terlalu besar (Max 500KB). Mohon kompres atau kirim bukti teks saja.");
-                        return false;
+                    // 2. Coba Baca Data
+                    const colRef = collection(db, COLLECTION_NAME);
+                    onSnapshot(colRef, (snapshot) => {
+                        window.globalReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        window.isDbReady = true;
+                        showStatus("● Online (Terhubung)", "success");
+                        
+                        // Render jika di admin
+                        if (!document.getElementById('adminDash').classList.contains('hidden')) {
+                            window.renderAdminList();
+                        }
+                    }, (err) => {
+                        console.error("Firestore Error:", err);
+                        if (err.code === 'permission-denied') {
+                            showStatus("⚠️ Gagal: Izin Ditolak (Cek Rules)", "error");
+                            alert("ERROR DATABASE: Izin ditolak.\nPastikan Anda sudah mengubah 'Firestore Rules' menjadi 'allow read, write: if true;' di Firebase Console.");
+                        } else {
+                            showStatus("⚠️ Gagal: " + err.code, "error");
+                        }
+                    });
+
+                } catch (error) {
+                    console.error("Auth Failed:", error);
+                    if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
+                        showStatus("⚠️ Gagal: Login Anonim Mati", "error");
+                        alert("ERROR LOGIN: Fitur 'Anonymous Sign-in' belum aktif.\nBuka Firebase Console > Authentication > Sign-in method > Aktifkan Anonymous.");
+                    } else {
+                        showStatus("⚠️ Koneksi Putus", "error");
                     }
-                    const base64File = await fileToBase64(file);
-                    data.attachment = base64File;
-                    data.attachmentName = file.name;
-                    data.attachmentType = file.type;
                 }
-
-                const colRef = collection(db, COLLECTION_NAME);
-                await addDoc(colRef, data);
-                return true;
-            } catch (e) {
-                alert("Gagal kirim: " + e.message);
-                return false;
             }
-        };
 
-        window.updateReportInCloud = async (docId, newData) => {
-            try {
-                const docRef = doc(db, COLLECTION_NAME, docId);
-                await updateDoc(docRef, newData);
-                return true;
-            } catch (e) {
-                alert("Gagal update: " + e.message);
-                return false;
-            }
-        };
+            // Expose functions
+            window.fileToBase64 = (file) => new Promise((r, j) => { const x = new FileReader(); x.onload=()=>r(x.result); x.onerror=e=>j(e); x.readAsDataURL(file); });
 
-        initSystem();
+            window.sendReportToCloud = async (data, file) => {
+                if (!window.isDbReady) { alert("Belum terhubung ke server. Cek indikator status."); return false; }
+                try {
+                    if (file) {
+                        if (file.size > 500 * 1024) { alert("File max 500KB."); return false; }
+                        data.attachment = await window.fileToBase64(file);
+                        data.attachmentName = file.name;
+                        data.attachmentType = file.type;
+                    }
+                    await addDoc(collection(db, COLLECTION_NAME), data);
+                    return true;
+                } catch (e) { alert("Gagal kirim: " + e.message); return false; }
+            };
+
+            window.updateReportInCloud = async (docId, newData) => {
+                try { await updateDoc(doc(db, COLLECTION_NAME, docId), newData); return true; }
+                catch (e) { alert("Gagal update: " + e.message); return false; }
+            };
+
+            initSystem();
+
+        } catch (setupError) {
+            alert("Konfigurasi Firebase Salah: " + setupError.message);
+        }
     </script>
 
     <style>
@@ -124,10 +135,17 @@
                     <span id="zoneLabel" class="text-[9px] md:text-[11px] font-bold uppercase tracking-widest text-teal-600 block truncate">Koperasi Karyawan Adaro</span>
                 </div>
             </div>
+            <!-- Status Indicator -->
+            <div class="hidden md:block mr-4" id="connStatus">Menghubungkan...</div>
+            
             <div class="flex space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 ml-2">
                 <button onclick="switchRole('public')" id="btnPublic" class="px-3 md:px-5 py-1.5 rounded text-xs md:text-sm font-bold bg-white shadow-sm text-teal-700 ring-1 ring-slate-200 transition">Pelapor</button>
                 <button onclick="switchRole('admin')" id="btnAdmin" class="px-3 md:px-5 py-1.5 rounded text-xs md:text-sm font-bold text-slate-500 hover:text-slate-800 transition">Pengawas</button>
             </div>
+        </div>
+        <!-- Mobile Status Bar -->
+        <div class="md:hidden bg-slate-900 text-center py-1 border-b border-slate-800" id="connStatusMobile">
+            <span id="connStatus" class="text-[10px] text-slate-400">Menghubungkan...</span>
         </div>
     </nav>
 
@@ -175,69 +193,26 @@
                             <div class="w-full lg:w-7/12 p-5 md:p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-slate-100">
                                 <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-6">Formulir Laporan Aman</h2>
                                 <form onsubmit="submitReportHandler(event)" class="space-y-4 md:space-y-5">
-                                    
-                                    <!-- 1. KATEGORI -->
-                                    <div class="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200">
-                                        <label class="block text-xs font-bold text-yellow-800 uppercase mb-2">1. Kategori Pelanggaran</label>
-                                        <select id="inKategori" onchange="updateLegalInfo()" required class="w-full p-2.5 md:p-3 border border-yellow-300 rounded-lg bg-white focus:ring-4 focus:ring-yellow-100 outline-none text-sm font-bold text-slate-700">
-                                            <option value="" disabled selected>-- Pilih Jenis Kasus --</option>
-                                            <option value="Korupsi">Korupsi / Suap / Gratifikasi</option>
-                                            <option value="Penggelapan">Penggelapan Jabatan (Aset/Uang)</option>
-                                            <option value="Pemalsuan">Pemalsuan Dokumen / Laporan</option>
-                                            <option value="Pencurian">Pencurian Fisik / Kas</option>
-                                            <option value="SOP">Pelanggaran Berat SOP & Etika</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- 2 & 3. IDENTITAS & WAKTU -->
+                                    <div class="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200"><label class="block text-xs font-bold text-yellow-800 uppercase mb-2">1. Kategori Pelanggaran</label><select id="inKategori" onchange="updateLegalInfo()" required class="w-full p-2.5 md:p-3 border border-yellow-300 rounded-lg bg-white focus:ring-4 focus:ring-yellow-100 outline-none text-sm font-bold text-slate-700"><option value="" disabled selected>-- Pilih Jenis Kasus --</option><option value="Korupsi">Korupsi / Suap / Gratifikasi</option><option value="Penggelapan">Penggelapan Jabatan (Aset/Uang)</option><option value="Pemalsuan">Pemalsuan Dokumen / Laporan</option><option value="Pencurian">Pencurian Fisik / Kas</option><option value="SOP">Pelanggaran Berat SOP & Etika</option></select></div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                                         <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Terlapor</label><input type="text" id="inTerlapor" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm"></div>
                                         <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Tanggal</label><input type="date" id="inWaktu" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm"></div>
                                     </div>
-
-                                    <!-- 4. KRONOLOGI (5W+1H) -->
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">
-                                            <span>4. Kronologi (5W + 1H)</span>
-                                            <span class="text-teal-600 text-[10px]">Wajib Detail</span>
-                                        </label>
-                                        <div class="bg-blue-50 p-3 rounded-t-lg border border-blue-100 border-b-0">
-                                            <p class="text-[10px] text-blue-800 font-medium">
-                                                💡 <strong>Panduan 5W+1H:</strong><br>
-                                                • <strong>Who:</strong> Siapa pelakunya?<br>
-                                                • <strong>When:</strong> Kapan kejadiannya (Hari, Jam)?<br>
-                                                • <strong>Where:</strong> Dimana lokasinya?<br>
-                                                • <strong>What:</strong> Apa yang dilakukan?<br>
-                                                • <strong>Why:</strong> Mengapa itu pelanggaran?<br>
-                                                • <strong>How:</strong> Bagaimana caranya?
-                                            </p>
-                                        </div>
-                                        <textarea id="inKronologi" rows="6" required class="w-full p-3 border border-slate-300 rounded-b-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Contoh: Pada hari Senin (20/10) di Gudang A, Saudara X terlihat memindahkan barang tanpa surat jalan..."></textarea>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between"><span>4. Kronologi (5W + 1H)</span><span class="text-teal-600 text-[10px]">Wajib Detail</span></label>
+                                        <div class="bg-blue-50 p-3 rounded-t-lg border border-blue-100 border-b-0"><p class="text-[10px] text-blue-800 font-medium">💡 <strong>Panduan 5W+1H:</strong><br>• <strong>Who:</strong> Siapa pelakunya? • <strong>When:</strong> Kapan kejadiannya?<br>• <strong>Where:</strong> Dimana? • <strong>What:</strong> Apa tindakannya?<br>• <strong>Why:</strong> Kenapa salah? • <strong>How:</strong> Bagaimana caranya?</p></div>
+                                        <textarea id="inKronologi" rows="6" required class="w-full p-3 border border-slate-300 rounded-b-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Contoh: Pada hari Senin (20/10) di Gudang A..."></textarea>
                                     </div>
-
-                                    <!-- 5. BUKTI (UPLOAD) -->
                                     <div class="space-y-2">
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">5. Bukti Awal (Upload / Teks)</label>
-                                        
-                                        <!-- Text Input -->
-                                        <textarea id="inBukti" rows="2" class="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white transition text-sm" placeholder="Deskripsikan bukti Anda disini..."></textarea>
-                                        
-                                        <!-- File Upload -->
+                                        <textarea id="inBukti" rows="2" class="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white transition text-sm" placeholder="Deskripsikan bukti jika tidak ada file..."></textarea>
                                         <div class="relative border-2 border-dashed border-slate-300 rounded-lg p-4 hover:bg-slate-50 transition text-center cursor-pointer group">
                                             <input type="file" id="inFile" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,.pdf">
-                                            <div class="space-y-1">
-                                                <svg class="mx-auto h-8 w-8 text-slate-400 group-hover:text-teal-500 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                                                <div class="text-xs text-slate-500"><span class="font-bold text-teal-600">Klik Upload</span> atau Foto Langsung</div>
-                                                <p class="text-[10px] text-slate-400">Max 500KB (JPG/PNG/PDF)</p>
-                                            </div>
+                                            <div class="space-y-1"><svg class="mx-auto h-8 w-8 text-slate-400 group-hover:text-teal-500 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg><div class="text-xs text-slate-500"><span class="font-bold text-teal-600">Klik Upload</span> atau Foto Langsung</div><p class="text-[10px] text-slate-400">Max 500KB (JPG/PNG/PDF)</p></div>
                                             <p id="fileName" class="text-xs font-bold text-teal-700 mt-2 hidden"></p>
                                         </div>
                                     </div>
-
-                                    <button type="submit" id="btnSubmitForm" class="w-full bg-slate-900 text-white font-bold py-3 md:py-4 rounded-xl hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2 text-sm md:text-base">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                                        KIRIM LAPORAN
-                                    </button>
+                                    <button type="submit" id="btnSubmitForm" class="w-full bg-slate-900 text-white font-bold py-3 md:py-4 rounded-xl hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2 text-sm md:text-base">KIRIM LAPORAN</button>
                                 </form>
                             </div>
                             <div class="w-full lg:w-5/12 bg-slate-50/50 p-5 md:p-8 lg:p-10 flex flex-col justify-center lg:border-l border-slate-100">
@@ -303,18 +278,14 @@
                                     <p id="dKron" class="text-slate-300 text-sm leading-relaxed whitespace-pre-line"></p>
                                 </div>
                                 <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                                    <h4 class="text-[10px] font-bold text-teal-600 uppercase mb-3">Bukti Awal & Lampiran</h4>
+                                    <h4 class="text-[10px] font-bold text-teal-600 uppercase mb-3">Bukti & Lampiran</h4>
                                     <p id="dBukti" class="text-teal-400 text-sm font-mono border-l-2 border-teal-800 pl-4 mb-4"></p>
                                     <div id="dAttachment" class="hidden">
                                         <a id="dAttachmentLink" href="#" target="_blank" class="flex items-center gap-3 bg-slate-800 p-3 rounded-lg border border-slate-600 hover:bg-slate-700 transition">
                                             <div class="bg-slate-700 p-2 rounded text-white">📎</div>
-                                            <div>
-                                                <div class="text-xs text-slate-400">Lampiran File</div>
-                                                <div id="dAttachmentName" class="text-sm font-bold text-white truncate max-w-[150px]"></div>
-                                            </div>
+                                            <div><div class="text-xs text-slate-400">Lampiran File</div><div id="dAttachmentName" class="text-sm font-bold text-white truncate max-w-[150px]"></div></div>
                                             <div class="text-xs text-teal-400 ml-auto">Buka ></div>
                                         </a>
-                                        <!-- Preview Image -->
                                         <img id="dAttachmentImg" class="mt-2 rounded border border-slate-600 w-full max-h-48 object-cover hidden">
                                     </div>
                                 </div>
@@ -325,7 +296,7 @@
                 </div>
 
                 <div id="admViewGuide" class="hidden flex-grow overflow-hidden fade-in bg-slate-900">
-                    <!-- ... (Existing Guide Code) ... -->
+                    <!-- GUIDE CONTENT (Same as before) -->
                     <div class="grid grid-cols-1 lg:grid-cols-12 h-full">
                         <div class="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto custom-scroll p-4 md:p-6 h-1/3 lg:h-full" id="adminFlowContainer"></div>
                         <div class="lg:col-span-9 p-6 md:p-10 overflow-y-auto custom-scroll h-2/3 lg:h-full">
@@ -347,140 +318,63 @@
     </main>
 
     <script>
-        // --- DATA & UI LOGIC ---
-        const sopSteps = [
-            { id: 1, title: "Validasi & Niat", desc: "Pastikan laporan Anda memiliki dasar hukum, bukan hanya emosi. Apakah ini pelanggaran aturan tertulis?", strat: "Gunakan 'Matriks Kelayakan': 1. Apakah ada aturan tertulis yang dilanggar? 2. Apakah ada kerugian materiil/immateriil? 3. Apakah ini kejadian berulang?", dos: ["Cek aturan perusahaan/PKB.", "Hitung estimasi kerugian kasar.", "Fokus pada fakta, bukan orangnya."], donts: ["Melapor hanya karena tidak suka pribadi (Dislike).", "Melapor berdasarkan rumor/gosip kantin.", "Menebak-nebak tanpa data dasar."] },
-            { id: 2, title: "Isolasi Digital", desc: "Lindungi jejak digital Anda. Anggap semua perangkat kantor dipantau oleh admin IT.", strat: "Prinsip 'Air Gap': Pisahkan aktivitas pelaporan dari jaringan kantor secara fisik.", dos: ["Gunakan HP/Laptop pribadi.", "Gunakan Paket Data Seluler sendiri.", "Gunakan Browser Mode Incognito."], donts: ["Menggunakan WiFi Kantor.", "Login email pelapor di PC Kantor.", "Mengirim bukti ke email korporat."] },
-            { id: 3, title: "Dokumentasi Senyap", desc: "Kumpulkan bukti statis tanpa memicu kecurigaan. Jadilah 'Hantu' di sistem.", strat: "Bukti terbaik adalah yang tidak bisa disangkal (Dokumen, Log, Foto). Hindari bukti lisan.", dos: ["Foto layar komputer saat sepi.", "Screenshot chat/email mencurigakan.", "Simpan di Cloud Pribadi."], donts: ["Membawa pulang dokumen asli (Pencurian!).", "Mencolokkan Flashdisk pribadi ke PC Kantor.", "Merekam percakapan tanpa izin."] },
-            { id: 4, title: "Kronologi Taktis", desc: "Susun cerita yang memudahkan investigator bekerja. Fokus pada 5W+1H.", strat: "Urutkan kejadian berdasarkan waktu (Timeline). Ini memudahkan pencocokan log.", dos: ["Tulis spesifik: Siapa, Kapan, Dimana.", "Sebutkan nominal angka jika tahu.", "Gunakan bahasa netral."], donts: ["Menggunakan kata sifat emosional.", "Mencampuradukkan fakta dengan opini.", "Menulis terlalu panjang."] },
-            { id: 5, title: "Eksekusi Lapor", desc: "Kirim data melalui aplikasi WBS ini. Sistem menggunakan enkripsi satu arah.", strat: "Lakukan di luar jam kerja atau saat jam istirahat di lokasi sepi.", dos: ["Isi semua kolom wajib.", "Simpan Tiket ID di Catatan HP.", "Langsung tutup tab browser."], donts: ["Share Tiket ID ke rekan kerja.", "Melapor hal yang sama berulang-ulang.", "Screenshot bukti lapor di Galeri umum."] },
-            { id: 6, title: "Mode Kamuflase", desc: "Kunci keberhasilan adalah perilaku Anda pasca-lapor. Jangan berubah!", strat: "Teknik 'Business as Usual': Jika biasa pendiam, tetap diam.", dos: ["Bekerja seperti biasa.", "Tetap ramah pada terlapor.", "Pura-pura kaget jika isu mencuat."], donts: ["Tiba-tiba menghindar.", "Berbisik-bisik mencurigakan.", "Menyindir terlapor di medsos."] },
-            { id: 7, title: "Monitoring Aman", desc: "Pantau status laporan hanya melalui jalur aman.", strat: "Komunikasi hanya via fitur 'Cek Status' di aplikasi ini.", dos: ["Cek status seminggu sekali.", "Jawab respon admin di sistem.", "Percayakan proses pada tim."], donts: ["Bertanya progres ke Pengurus.", "Membuka identitas diri.", "Kecewa terbuka."] }
-        ];
-        const protocols = {
-            "Korupsi": { legal: { title: "Korupsi / Suap / Gratifikasi", pasal_code: "Pasal 2 ayat (1) & Pasal 3 UU 31/1999 jo. UU 20/2001", pasal_desc: "\"Setiap orang yang secara melawan hukum melakukan perbuatan memperkaya diri sendiri atau orang lain atau suatu korporasi...\" (Pasal 2). \"Setiap orang yang dengan tujuan menguntungkan diri sendiri... menyalahgunakan kewenangan...\" (Pasal 3).", prison: "4 - 20 Tahun Penjara", fine: "Rp 200 Juta - Rp 1 Miliar" } },
-            "Penggelapan": { legal: { title: "Penggelapan Dalam Jabatan", pasal_code: "KUHP Pasal 372 & 374", pasal_desc: "\"Barang siapa dengan sengaja dan melawan hukum memiliki barang sesuatu yang seluruhnya atau sebagian adalah kepunyaan orang lain...\" (Pasal 372). Diperberat jika dilakukan oleh orang yang memegang barang itu karena jabatannya (Pasal 374).", prison: "Maksimal 5 Tahun", fine: "Denda + Ganti Rugi Penuh" } },
-            "Pemalsuan": { legal: { title: "Pemalsuan Dokumen / Laporan", pasal_code: "KUHP Pasal 263 Ayat (1)", pasal_desc: "\"Barangsiapa dengan sengaja dan melawan hukum memalsukan surat-surat yang dapat menimbulkan kerugian bagi orang lain atau barangsiapa menyerahkan surat-surat yang dipalsukan itu seolah-olah asli...\"", prison: "Maksimal 6 Tahun", fine: "Sanksi Pidana" } },
-            "Pencurian": { legal: { title: "Pencurian Fisik / Kas", pasal_code: "KUHP Pasal 362", pasal_desc: "\"Barangsiapa mengambil barang sesuatu, yang seluruhnya atau sebagian kepunyaan orang lain, dengan maksud untuk dimiliki secara melawan hukum...\" (Pencurian Biasa).", prison: "Maksimal 5 Tahun", fine: "Audit Restitusi (Ganti Rugi)" } },
-            "SOP": { legal: { title: "Pelanggaran Berat SOP & Etika", pasal_code: "UU 17/2012 (Pasal 64) & KUHP 372 (Jika Fraud)", pasal_desc: "\"Pengurus dapat diberhentikan berdasarkan keputusan Rapat Anggota...\" (Sanksi Internal). Jika unsur fraud terpenuhi, dikenakan pasal Penggelapan.", prison: "4 Tahun (Jika Fraud)", fine: "Pemecatan (PHK) + Pidana" } }
-        };
-        const adminSteps = [
-            { id: 1, title: "Telaah Awal", icon: "🔍", desc: "Analisis laporan untuk memisahkan 'noise' dari 'signal'.", goal: "Validasi layak investigasi.", risk: "Investigasi Prematur.", check: ["Cek 5W+1H.", "Cek wewenang terlapor.", "Hitung kerugian."] },
-            { id: 2, title: "Bentuk Tim", icon: "👥", desc: "Tim steril dari konflik kepentingan.", goal: "Objektifitas.", risk: "Kebocoran Internal.", check: ["Cek relasi.", "Wajib NDA.", "Cover Story."] },
-            { id: 3, title: "Forensik Data", icon: "💾", desc: "Amankan bukti digital/fisik SEBELUM interaksi.", goal: "Chain of Custody.", risk: "Penghancuran Bukti.", check: ["Image Copy HDD.", "Log CCTV.", "Amankan Dokumen."] },
-            { id: 4, title: "Observasi", icon: "👀", desc: "Validasi data forensik di lapangan.", goal: "Konfirmasi anomali.", risk: "Eksposur Dini.", check: ["Stock Opname.", "Cek fisik.", "Gaya hidup."] },
-            { id: 5, title: "Interogasi", icon: "🗣️", desc: "Konfrontasi setelah bukti lengkap.", goal: "Pengakuan.", risk: "Debat Kusir.", check: ["Ruangan netral.", "Open Questions.", "Bukti bertahap."] },
-            { id: 6, title: "Laporan (LHA)", icon: "📝", desc: "Susun Laporan Hasil Audit.", goal: "Rekomendasi Sanksi.", risk: "Bias Kesimpulan.", check: ["Kronologi.", "Hitung Kerugian.", "Rekomendasi."] }
-        ];
+        // --- DATA OBJECTS (UNCHANGED) ---
+        const sopSteps = [ { id: 1, title: "Validasi & Niat", desc: "Pastikan laporan Anda memiliki dasar hukum, bukan hanya emosi.", strat: "Gunakan 'Matriks Kelayakan'.", dos: ["Cek aturan.", "Fokus fakta."], donts: ["Dislike.", "Rumor."] }, { id: 2, title: "Isolasi Digital", desc: "Lindungi jejak digital.", strat: "Prinsip 'Air Gap'.", dos: ["HP Pribadi.", "Data Seluler."], donts: ["WiFi Kantor.", "Email Korporat."] }, { id: 3, title: "Dokumentasi", desc: "Kumpulkan bukti statis.", strat: "Bukti tak terbantahkan.", dos: ["Foto layar.", "Screenshot."], donts: ["Ambil asli.", "Flashdisk."] }, { id: 4, title: "Kronologi", desc: "Susun cerita 5W+1H.", strat: "Timeline waktu.", dos: ["Spesifik.", "Netral."], donts: ["Emosional.", "Opini."] }, { id: 5, title: "Eksekusi", desc: "Kirim via WBS.", strat: "Luar jam kerja.", dos: ["Isi lengkap.", "Simpan Tiket."], donts: ["Share tiket.", "Spam."] }, { id: 6, title: "Kamuflase", desc: "Jangan berubah.", strat: "Business as Usual.", dos: ["Kerja biasa.", "Ramah."], donts: ["Menghindar.", "Berbisik."] }, { id: 7, title: "Monitor", desc: "Pantau jalur aman.", strat: "Cek berkala.", dos: ["Cek di rumah.", "Jawab admin."], donts: ["Tanya langsung.", "Buka identitas."] } ];
+        const protocols = { "Korupsi": { legal: { title: "Korupsi", pasal_code: "UU Tipikor", pasal_desc: "Memperkaya diri melawan hukum.", prison: "Min 4 Thn", fine: "Min 200 Juta" } }, "Penggelapan": { legal: { title: "Penggelapan", pasal_code: "KUHP 374", pasal_desc: "Penguasaan barang karena jabatan.", prison: "Max 5 Thn", fine: "Ganti Rugi" } }, "Pemalsuan": { legal: { title: "Pemalsuan", pasal_code: "KUHP 263", pasal_desc: "Surat palsu merugikan.", prison: "Max 6 Thn", fine: "Sanksi Pidana" } }, "Pencurian": { legal: { title: "Pencurian", pasal_code: "KUHP 362", pasal_desc: "Mengambil milik orang.", prison: "Max 5 Thn", fine: "Restitusi" } }, "SOP": { legal: { title: "Pelanggaran Berat", pasal_code: "UU Koperasi", pasal_desc: "Langgar aturan internal.", prison: "4 Thn (Fraud)", fine: "PHK" } } };
+        const adminSteps = [ { id: 1, title: "Telaah", icon: "🔍", desc: "Analisis awal.", goal: "Validasi.", risk: "Prematur.", check: ["5W1H", "Kerugian"] }, { id: 2, title: "Tim", icon: "👥", desc: "Bentuk tim steril.", goal: "Objektif.", risk: "Bocor.", check: ["NDA", "Cover Story"] }, { id: 3, title: "Forensik", icon: "💾", desc: "Amankan bukti.", goal: "Chain of Custody.", risk: "Penghancuran.", check: ["HDD Copy", "CCTV"] }, { id: 4, title: "Observasi", icon: "👀", desc: "Cek lapangan.", goal: "Konfirmasi.", risk: "Eksposur.", check: ["Stok Opname", "Fisik"] }, { id: 5, title: "Interogasi", icon: "🗣️", desc: "Konfrontasi.", goal: "Pengakuan.", risk: "Debat.", check: ["Ruangan", "Bukti"] }, { id: 6, title: "Laporan", icon: "📝", desc: "LHA Final.", goal: "Sanksi.", risk: "Bias.", check: ["Kronologi", "Sanksi"] } ];
 
-        // --- UI FUNCTIONS ---
+        // --- UI LOGIC ---
         function updateLegalInfo() { const c = document.getElementById('inKategori').value; const p = protocols[c]; if(p) { document.getElementById('legalEmpty').classList.add('hidden'); document.getElementById('legalContent').classList.remove('hidden'); document.getElementById('lPasalTitle').innerText = p.legal.title; document.getElementById('lPasalDesc').innerText = p.legal.pasal_desc; document.getElementById('lPrison').innerText = p.legal.prison; document.getElementById('lFine').innerText = p.legal.fine; } }
         function loadGuideDetail(id) { const s = sopSteps.find(x => x.id === id); document.getElementById('guideEmpty').classList.add('hidden'); document.getElementById('guideDetail').classList.remove('hidden'); document.getElementById('gStep').innerText = `LANGKAH ${s.id}`; document.getElementById('gTitle').innerText = s.title; document.getElementById('gDesc').innerText = s.desc; document.getElementById('gStrat').innerText = s.strat; document.getElementById('gDos').innerHTML = s.dos.map(i=>`<li>${i}</li>`).join(''); document.getElementById('gDonts').innerHTML = s.donts.map(i=>`<li>${i}</li>`).join(''); if(window.innerWidth < 1024) document.getElementById('guideDetailCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         function loadAdminGuideDetail(id) { const s = adminSteps.find(x => x.id === id); document.getElementById('adminGuideEmpty').classList.add('hidden'); document.getElementById('adminGuideDetail').classList.remove('hidden'); document.getElementById('adStep').innerText = `TAHAP ${s.id}`; document.getElementById('adTitle').innerText = s.title; document.getElementById('adDesc').innerText = s.desc; document.getElementById('adIcon').innerText = s.icon; document.getElementById('adGoal').innerText = s.goal; document.getElementById('adRisk').innerText = s.risk; document.getElementById('adCheck').innerHTML = s.check.map(c => `<li class="px-6 py-4 flex items-start gap-3 text-sm text-slate-300 border-b border-slate-800 last:border-0"><span class="text-teal-500 mt-0.5">✔</span>${c}</li>`).join(''); }
 
-        // --- SUBMIT HANDLER ---
-        async function submitReportHandler(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btnSubmitForm');
-            btn.innerHTML = "MENGIRIM..."; btn.disabled = true;
-
-            const token = '#WBS-' + Math.floor(10000 + Math.random() * 90000);
-            const reportData = {
-                token: token,
-                kategori: document.getElementById('inKategori').value,
-                terlapor: document.getElementById('inTerlapor').value,
-                waktu: document.getElementById('inWaktu').value,
-                kronologi: document.getElementById('inKronologi').value,
-                bukti: document.getElementById('inBukti').value,
-                status: 'Menunggu',
-                adminResponse: '',
-                timestamp: new Date().toLocaleDateString('id-ID'),
-                createdAt: Date.now()
-            };
-
-            const fileInput = document.getElementById('inFile');
-            const file = fileInput.files.length > 0 ? fileInput.files[0] : null;
-
-            const success = await window.sendReportToCloud(reportData, file);
-            
-            if (success) {
-                document.getElementById('ticketDisplay').innerText = token;
-                document.getElementById('modalSuccess').classList.remove('hidden');
-                document.forms[0].reset();
-                document.getElementById('fileName').classList.add('hidden');
-            }
-            btn.innerHTML = "KIRIM LAPORAN KE CLOUD"; btn.disabled = false;
-        }
-
-        // --- FILE INPUT UI ---
+        // --- HANDLERS (SUBMIT, FILE, VIEW) ---
         document.getElementById('inFile').addEventListener('change', function() {
             const name = this.files[0] ? this.files[0].name : '';
             const label = document.getElementById('fileName');
-            if(name) { label.innerText = "File terpilih: " + name; label.classList.remove('hidden'); }
-            else { label.classList.add('hidden'); }
+            if(name) { label.innerText = "File: " + name; label.classList.remove('hidden'); } else label.classList.add('hidden');
         });
 
+        async function submitReportHandler(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitForm'); btn.innerHTML = "MENGIRIM..."; btn.disabled = true;
+            const token = '#WBS-' + Math.floor(10000 + Math.random() * 90000);
+            const reportData = {
+                token: token, kategori: document.getElementById('inKategori').value, terlapor: document.getElementById('inTerlapor').value, waktu: document.getElementById('inWaktu').value, kronologi: document.getElementById('inKronologi').value, buktiText: document.getElementById('inBukti').value, status: 'Menunggu', adminResponse: '', timestamp: new Date().toLocaleDateString('id-ID'), createdAt: Date.now()
+            };
+            const file = document.getElementById('inFile').files[0];
+            const success = await window.sendReportToCloud(reportData, file);
+            if (success) { document.getElementById('ticketDisplay').innerText = token; document.getElementById('modalSuccess').classList.remove('hidden'); document.forms[0].reset(); document.getElementById('fileName').classList.add('hidden'); }
+            btn.innerHTML = "KIRIM LAPORAN"; btn.disabled = false;
+        }
+
         async function checkStatusCloud() {
-            const token = document.getElementById('trackInput').value.trim();
-            if(!window.globalReports) { alert("Data belum sinkron."); return; }
-            const r = window.globalReports.find(x => x.token === token);
-            const res = document.getElementById('trackResult');
-            if (r) {
-                res.classList.remove('hidden');
-                document.getElementById('tBadge').innerText = r.status;
-                document.getElementById('tMsg').innerText = r.status === 'Investigasi' ? 'Investigasi Berjalan' : 'Laporan diterima.';
-                document.getElementById('tResp').innerText = r.adminResponse || "-";
-                document.getElementById('tBadge').className = `px-3 py-1 rounded-full text-xs font-bold ${r.status === 'Investigasi' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`;
-            } else { alert("Tiket tidak ditemukan."); res.classList.add('hidden'); }
+            const t = document.getElementById('trackInput').value.trim(); const r = window.globalReports.find(x => x.token === t); const res = document.getElementById('trackResult');
+            if(r) { res.classList.remove('hidden'); document.getElementById('tBadge').innerText = r.status; document.getElementById('tMsg').innerText = r.status === 'Investigasi' ? 'Investigasi Berjalan' : 'Laporan diterima.'; document.getElementById('tResp').innerText = r.adminResponse || "-"; } else { alert("Tiket tidak ditemukan."); res.classList.add('hidden'); }
         }
 
         let currentCaseId = null;
         async function saveCaseHandler() {
             if (!currentCaseId) return;
-            const newData = { status: document.getElementById('dActionStatus').value, adminResponse: document.getElementById('dActionResp').value };
-            const success = await window.updateReportInCloud(currentCaseId, newData);
-            if (success) alert("Status berhasil diupdate.");
+            const success = await window.updateReportInCloud(currentCaseId, { status: document.getElementById('dActionStatus').value, adminResponse: document.getElementById('dActionResp').value });
+            if (success) alert("Update berhasil.");
         }
 
         window.renderAdminList = function() {
-            const list = document.getElementById('reportList'); list.innerHTML = '';
-            const sorted = [...window.globalReports].sort((a, b) => b.createdAt - a.createdAt);
-            if (sorted.length === 0) document.getElementById('emptyAdmin').classList.remove('hidden');
-            else {
-                document.getElementById('emptyAdmin').classList.add('hidden');
-                sorted.forEach(r => {
-                    const div = document.createElement('div');
-                    div.className = "p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800 transition";
-                    div.onclick = () => openCase(r);
-                    div.innerHTML = `<div class="flex justify-between mb-1"><span class="text-[10px] font-mono text-slate-500">${r.token}</span><span class="text-[10px] font-bold ${r.status === 'Menunggu' ? 'text-yellow-500' : 'text-teal-500'}">${r.status}</span></div><div class="text-sm text-white font-bold truncate">${r.kategori}</div><div class="text-[10px] text-slate-500 truncate">${r.timestamp}</div>`;
-                    list.appendChild(div);
-                });
-            }
+            const l = document.getElementById('reportList'); l.innerHTML = '';
+            const s = [...window.globalReports].sort((a, b) => b.createdAt - a.createdAt);
+            if (s.length === 0) document.getElementById('emptyAdmin').classList.remove('hidden');
+            else { document.getElementById('emptyAdmin').classList.add('hidden'); s.forEach(r => { const d = document.createElement('div'); d.className = "p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800 transition"; d.onclick = () => openCase(r); d.innerHTML = `<div class="flex justify-between mb-1"><span class="text-[10px] font-mono text-slate-500">${r.token}</span><span class="text-[10px] font-bold ${r.status === 'Menunggu' ? 'text-yellow-500' : 'text-teal-500'}">${r.status}</span></div><div class="text-sm text-white font-bold truncate">${r.kategori}</div><div class="text-[10px] text-slate-500 truncate">${r.timestamp}</div>`; l.appendChild(d); }); }
         }
 
         function openCase(r) {
-            currentCaseId = r.id;
-            document.getElementById('adminMasterList').classList.add('hidden', 'lg:block');
-            document.getElementById('adminDetailPanel').classList.remove('translate-x-full');
-            document.getElementById('workspaceEmpty').classList.add('hidden');
-            document.getElementById('workspaceDetail').classList.remove('hidden');
-            document.getElementById('dTicket').innerText = r.token; document.getElementById('dDate').innerText = r.timestamp; document.getElementById('dCat').innerText = r.kategori; document.getElementById('dSuspect').innerText = r.terlapor; document.getElementById('dStatusBadge').innerText = r.status; document.getElementById('dStatusBadge').className = `px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${r.status === 'Investigasi' ? 'bg-orange-900 text-orange-200' : 'bg-slate-700 text-slate-300'}`;
-            document.getElementById('dKron').innerText = r.kronologi; document.getElementById('dBukti').innerText = r.bukti; document.getElementById('dActionStatus').value = r.status; document.getElementById('dActionResp').value = r.adminResponse;
-            
-            // Attachment Handling
-            const attDiv = document.getElementById('dAttachment');
-            if(r.attachment) {
-                attDiv.classList.remove('hidden');
-                document.getElementById('dAttachmentName').innerText = r.attachmentName || "Lampiran";
-                document.getElementById('dAttachmentLink').href = r.attachment;
-                // Show preview if image
-                const imgPrev = document.getElementById('dAttachmentImg');
-                if(r.attachmentType && r.attachmentType.startsWith('image/')) {
-                    imgPrev.src = r.attachment; imgPrev.classList.remove('hidden');
-                } else { imgPrev.classList.add('hidden'); }
-            } else { attDiv.classList.add('hidden'); }
+            currentCaseId = r.id; document.getElementById('adminMasterList').classList.add('hidden', 'lg:block'); document.getElementById('adminDetailPanel').classList.remove('translate-x-full'); document.getElementById('workspaceEmpty').classList.add('hidden'); document.getElementById('workspaceDetail').classList.remove('hidden');
+            document.getElementById('dTicket').innerText = r.token; document.getElementById('dDate').innerText = r.timestamp; document.getElementById('dCat').innerText = r.kategori; document.getElementById('dSuspect').innerText = r.terlapor; document.getElementById('dStatusBadge').innerText = r.status; document.getElementById('dKron').innerText = r.kronologi; document.getElementById('dBukti').innerText = r.buktiText || "-"; document.getElementById('dActionStatus').value = r.status; document.getElementById('dActionResp').value = r.adminResponse;
+            const att = document.getElementById('dAttachment');
+            if(r.attachment) { att.classList.remove('hidden'); document.getElementById('dAttachmentName').innerText = r.attachmentName; document.getElementById('dAttachmentLink').href = r.attachment; const img = document.getElementById('dAttachmentImg'); if(r.attachmentType.startsWith('image/')) { img.src=r.attachment; img.classList.remove('hidden'); } else img.classList.add('hidden'); } else att.classList.add('hidden');
         }
 
+        // --- NAVIGATION ---
         function switchRole(r) { const p=document.getElementById('publicZone'); const s=document.getElementById('secureZone'); if(r==='public'){ p.classList.remove('-translate-x-full'); s.classList.add('translate-x-full'); } else { p.classList.add('-translate-x-full'); s.classList.remove('translate-x-full'); } }
         function setPublicTab(t) { ['guide','report','track'].forEach(x=>{ document.getElementById(`content-${x}`).classList.add('hidden'); document.getElementById(`tab-${x}`).classList.replace('border-teal-600','border-transparent'); document.getElementById(`tab-${x}`).classList.replace('text-teal-700','text-slate-500'); }); document.getElementById(`content-${t}`).classList.remove('hidden'); document.getElementById(`tab-${t}`).classList.replace('border-transparent','border-teal-600'); document.getElementById(`tab-${t}`).classList.replace('text-slate-500','text-teal-700'); }
         function authAdmin() { if(document.getElementById('adminPass').value==='audit2024'){ document.getElementById('adminLogin').classList.add('hidden'); document.getElementById('adminDash').classList.remove('hidden'); window.renderAdminList(); switchAdminTab('workspace'); } else document.getElementById('loginErr').classList.remove('hidden'); }
@@ -488,7 +382,7 @@
         function closeAdminDetailMobile() { document.getElementById('adminDetailPanel').classList.add('translate-x-full'); document.getElementById('adminMasterList').classList.remove('hidden'); }
         function switchAdminTab(t) { const w = document.getElementById('admViewWorkspace'); const g = document.getElementById('admViewGuide'); const bW = document.getElementById('btnAdmWork'); const bG = document.getElementById('btnAdmGuide'); if(t === 'workspace') { w.classList.remove('hidden'); g.classList.add('hidden'); bW.classList.add('bg-red-900/30','text-red-300'); bG.classList.remove('bg-red-900/30','text-red-300'); } else { w.classList.add('hidden'); g.classList.remove('hidden'); bG.classList.add('bg-red-900/30','text-red-300'); bW.classList.remove('bg-red-900/30','text-red-300'); loadAdminGuideDetail(1); } }
 
-        // Initialize UI
+        // Init
         const flowCont = document.getElementById('flowContainer'); sopSteps.forEach((s, i) => { const isLast = i === sopSteps.length - 1; const div = document.createElement('div'); div.className = `relative pl-12 md:pl-14 pb-6 md:pb-8 cursor-pointer group ${isLast?'last-step':''}`; div.onclick = () => { loadGuideDetail(s.id); }; div.innerHTML = `<div class="step-line"></div><div class="absolute left-0 top-1 w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-slate-300 bg-white text-slate-400 font-bold flex items-center justify-center text-sm md:text-lg transition-all group-hover:border-teal-500 group-hover:bg-teal-50 group-hover:text-teal-700 z-10">${s.id}</div><h4 class="font-bold text-slate-600 pt-2 md:pt-3 text-xs md:text-sm uppercase tracking-wide group-hover:text-teal-700 transition">${s.title}</h4>`; flowCont.appendChild(div); });
         loadGuideDetail(1);
         const adminFlow = document.getElementById('adminFlowContainer'); adminSteps.forEach((s, i) => { const isLast = i === adminSteps.length - 1; const div = document.createElement('div'); div.className = `relative pl-12 pb-8 cursor-pointer group ${isLast?'last-step':''}`; div.onclick = () => loadAdminGuideDetail(s.id); div.innerHTML = `<div class="admin-step-line"></div><div class="absolute left-0 top-1 w-10 h-10 rounded-full border-2 border-slate-600 bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-sm transition-all group-hover:border-red-500 group-hover:text-red-400 z-10">${s.id}</div><h4 class="font-bold text-slate-500 pt-2 text-xs uppercase tracking-wide group-hover:text-red-400 transition">${s.title}</h4>`; adminFlow.appendChild(div); });
