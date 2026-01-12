@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIAT v3.1 - Sistem Integritas & Audit Terpadu</title>
+    <title>WBS - Koperasi Karyawan Adaro Karya Mandiri</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
     <!-- 
-      SIAT v3.1 UPDATE LOG:
-      1. REFINED SOP ('sopSteps'): Rewritten to align with specific legal articles (Tipikor, KUHP 372/374).
-         - Focus on proving "Unsur Melawan Hukum" & "Kerugian".
-         - Emphasis on "Alat Bukti Sah" (Legal Evidence).
-      2. PRESERVED: Legal Database (Protocols) from v3.0.
-      3. PRESERVED: Admin Investigation Matrix.
+      WBS v3.1 UPDATE LOG:
+      1. SOP REWRITE: Completely rewrote 'sopSteps' content.
+         - Added cybersecurity tactics (avoiding USB logs, screen mirroring).
+         - Added psychological tactics (behavioral camouflage).
+         - Clearer Dos/Donts for non-technical users.
+      2. PRESERVED: Header Adaro, Legal Database (Verbatim), Admin Matrix.
     -->
 
     <style>
@@ -33,12 +33,12 @@
 
     <!-- NAVBAR -->
     <nav id="mainNav" class="bg-white border-b border-slate-200 transition-colors duration-300 z-50 shrink-0">
-        <div class="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div id="logoIcon" class="bg-teal-700 text-white w-9 h-9 rounded flex items-center justify-center font-bold shadow-sm text-lg">S</div>
-                <div class="leading-tight">
-                    <span id="appTitle" class="font-bold text-lg tracking-tight text-slate-800 block">SIAT v3.1</span>
-                    <span id="zoneLabel" class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Legal-Based SOP</span>
+        <div class="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <img src="https://i.ibb.co.com/WvTwLMn5/image-1.png" alt="Logo Adaro" class="h-12 w-auto object-contain">
+                <div class="leading-tight border-l border-slate-300 pl-4">
+                    <span id="appTitle" class="font-bold text-lg tracking-tight text-slate-800 block uppercase">Whistleblowing System</span>
+                    <span id="zoneLabel" class="text-[11px] font-bold uppercase tracking-widest text-teal-600 block">Koperasi Karyawan Adaro Karya Mandiri</span>
                 </div>
             </div>
             <div class="flex space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
@@ -56,14 +56,14 @@
             <div class="flex flex-col h-full max-w-7xl mx-auto w-full">
                 <!-- Public Tabs -->
                 <div class="flex border-b border-slate-200 bg-white px-8 space-x-8 shrink-0 shadow-sm z-10">
-                    <button onclick="setPublicTab('guide')" class="py-4 border-b-2 border-teal-600 font-bold text-teal-700 transition" id="tab-guide">SOP Pelaporan Hukum</button>
+                    <button onclick="setPublicTab('guide')" class="py-4 border-b-2 border-teal-600 font-bold text-teal-700 transition" id="tab-guide">Panduan SOP Detail</button>
                     <button onclick="setPublicTab('report')" class="py-4 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 transition" id="tab-report">Formulir Laporan</button>
                     <button onclick="setPublicTab('track')" class="py-4 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 transition" id="tab-track">Cek Status</button>
                 </div>
 
                 <!-- Content Area -->
                 <div class="flex-grow overflow-y-auto custom-scroll p-6 lg:p-8">
-                    <!-- 1. SOP GUIDE (REFINED) -->
+                    <!-- 1. SOP GUIDE (PUBLIC) -->
                     <div id="content-guide" class="fade-in grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
                         <div class="lg:col-span-4 space-y-0 relative pb-10 pr-2" id="flowContainer"></div>
                         <div class="lg:col-span-8 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm h-fit sticky top-0">
@@ -71,7 +71,7 @@
                                 <span id="gStep" class="text-[10px] font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100 mb-4 inline-block tracking-widest uppercase"></span>
                                 <h3 id="gTitle" class="text-3xl font-bold text-slate-900 mb-3 tracking-tight"></h3>
                                 <p id="gDesc" class="text-slate-600 mb-8 text-lg leading-relaxed border-b border-slate-100 pb-6"></p>
-                                <div class="bg-indigo-50/50 p-6 rounded-xl border border-indigo-100 mb-6"><h4 class="font-bold text-indigo-900 text-xs mb-3 uppercase tracking-wider">Strategi Taktis (Alhamdi Logic)</h4><p id="gStrat" class="text-sm text-indigo-950 leading-relaxed font-medium"></p></div>
+                                <div class="bg-indigo-50/50 p-6 rounded-xl border border-indigo-100 mb-6"><h4 class="font-bold text-indigo-900 text-xs mb-3 uppercase tracking-wider">Strategi Taktis</h4><p id="gStrat" class="text-sm text-indigo-950 leading-relaxed font-medium"></p></div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5"><div class="bg-teal-50/50 p-5 rounded-xl border border-teal-100"><h4 class="font-bold text-teal-800 text-xs uppercase mb-3">✅ Protokol Wajib</h4><ul id="gDos" class="list-disc ml-4 text-sm text-teal-900 space-y-2 leading-snug"></ul></div><div class="bg-rose-50/50 p-5 rounded-xl border border-rose-100"><h4 class="font-bold text-rose-800 text-xs uppercase mb-3">✕ Pantangan Fatal</h4><ul id="gDonts" class="list-disc ml-4 text-sm text-rose-900 space-y-2 leading-snug"></ul></div></div>
                             </div>
                             <div id="guideEmpty" class="h-96 flex flex-col items-center justify-center text-slate-300"><div class="text-6xl mb-4 grayscale opacity-20">📚</div><p class="text-sm font-bold text-slate-400">Pilih tahapan di menu kiri.</p></div>
@@ -81,7 +81,6 @@
                     <!-- 2. REPORT FORM -->
                     <div id="content-report" class="hidden fade-in max-w-7xl mx-auto">
                         <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col lg:flex-row">
-                            <!-- Form Section -->
                             <div class="w-full lg:w-1/2 p-8 lg:p-10 border-r border-slate-100">
                                 <h2 class="text-2xl font-bold text-slate-800 mb-6">Formulir Laporan Aman</h2>
                                 <form onsubmit="submitReport(event)" class="space-y-5">
@@ -92,8 +91,6 @@
                                     <button type="submit" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-slate-800 transition shadow-lg mt-4">KIRIM LAPORAN TERENKRIPSI</button>
                                 </form>
                             </div>
-                            
-                            <!-- Legal Info Section -->
                             <div class="w-full lg:w-1/2 bg-slate-50/50 p-8 lg:p-10 flex flex-col justify-center border-l border-slate-100">
                                 <div id="legalContent" class="hidden animate-pulse-once">
                                     <div class="flex items-center gap-3 mb-6"><div class="p-2 bg-red-100 rounded text-red-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg></div><h3 class="text-xl font-bold text-slate-900 uppercase tracking-tight">Analisis Hukum</h3></div>
@@ -154,15 +151,9 @@
                     <div class="flex-grow bg-slate-800 overflow-y-auto custom-scroll p-8">
                         <div id="workspaceEmpty" class="h-full flex flex-col items-center justify-center text-slate-600 opacity-30"><div class="text-6xl mb-4">📂</div><p class="font-mono text-sm uppercase">Pilih Kasus di Kiri</p></div>
                         <div id="workspaceDetail" class="hidden fade-in max-w-5xl mx-auto pb-20">
-                            <!-- Case Header -->
-                            <div class="flex justify-between items-start mb-8 border-b border-slate-700 pb-6">
-                                <div><div class="flex gap-3 mb-2 items-center"><span id="dTicket" class="font-mono text-red-400 text-xs font-bold bg-red-900/20 px-2 py-1 rounded border border-red-900/30"></span><span id="dDate" class="font-mono text-slate-400 text-[10px]"></span></div><h2 id="dCat" class="text-3xl font-bold text-white mb-1 tracking-tight"></h2><p class="text-sm text-slate-400">Terlapor: <span id="dSuspect" class="text-white font-bold bg-slate-700 px-2 py-0.5 rounded"></span></p></div><div id="dStatusBadge" class="px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wide shadow-lg"></div>
-                            </div>
-                            <!-- Core Data -->
+                            <div class="flex justify-between items-start mb-8 border-b border-slate-700 pb-6"><div><div class="flex gap-3 mb-2 items-center"><span id="dTicket" class="font-mono text-red-400 text-xs font-bold bg-red-900/20 px-2 py-1 rounded border border-red-900/30"></span><span id="dDate" class="font-mono text-slate-400 text-[10px]"></span></div><h2 id="dCat" class="text-3xl font-bold text-white mb-1 tracking-tight"></h2><p class="text-sm text-slate-400">Terlapor: <span id="dSuspect" class="text-white font-bold bg-slate-700 px-2 py-0.5 rounded"></span></p></div><div id="dStatusBadge" class="px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wide shadow-lg"></div></div>
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"><div class="bg-slate-900 p-6 rounded-xl border border-slate-700"><h4 class="text-[10px] font-bold text-slate-500 uppercase mb-4 tracking-wider">Kronologi Pelapor</h4><p id="dKron" class="text-slate-300 text-sm leading-relaxed whitespace-pre-line"></p></div><div class="bg-slate-900 p-6 rounded-xl border border-slate-700"><h4 class="text-[10px] font-bold text-teal-600 uppercase mb-4 tracking-wider">Bukti Awal Tersedia</h4><p id="dBukti" class="text-teal-400 text-sm font-mono border-l-2 border-teal-800 pl-4"></p></div></div>
-                            <!-- Protocols -->
                             <div class="mb-8"><div class="flex items-center gap-4 mb-6"><div class="h-px bg-slate-700 flex-grow"></div><span class="text-red-500 font-bold text-xs uppercase tracking-widest font-mono bg-slate-800 px-4 py-1 border border-red-900/50 rounded-full">Protokol Investigasi Taktis</span><div class="h-px bg-slate-700 flex-grow"></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-5"><div class="bg-slate-900 border border-blue-900/40 rounded-xl p-5"><h5 class="text-blue-400 font-bold text-xs uppercase mb-3">📑 Dokumen Sitaan</h5><ul id="invDocs" class="list-disc ml-4 text-xs text-slate-400 space-y-1.5"></ul></div><div class="bg-slate-900 border border-orange-900/40 rounded-xl p-5"><h5 class="text-orange-400 font-bold text-xs uppercase mb-3">🚩 Pola Fraud</h5><ul id="invFlags" class="list-disc ml-4 text-xs text-slate-400 space-y-1.5"></ul></div><div class="bg-slate-900 border border-purple-900/40 rounded-xl p-5"><h5 class="text-purple-400 font-bold text-xs uppercase mb-3">💬 Pertanyaan Kunci</h5><ul id="invQ" class="space-y-2"></ul></div></div></div>
-                            <!-- Action -->
                             <div class="bg-slate-900 p-6 rounded-xl border border-yellow-700/30 shadow-lg"><h4 class="text-yellow-500 font-bold text-xs uppercase mb-4">Keputusan Pengawas</h4><div class="flex flex-col md:flex-row gap-4 items-end"><div class="w-full md:w-1/3"><label class="block text-[10px] text-slate-500 uppercase mb-1">Status</label><select id="dActionStatus" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500"><option value="Menunggu">Menunggu</option><option value="Investigasi">Investigasi</option><option value="Selesai">Selesai</option><option value="Ditolak">Ditolak</option></select></div><div class="w-full md:w-2/3"><label class="block text-[10px] text-slate-500 uppercase mb-1">Respon Internal</label><input type="text" id="dActionResp" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500" placeholder="Pesan untuk pelapor..."></div><button onclick="saveCase()" class="bg-teal-700 hover:bg-teal-600 text-white px-6 py-3 rounded-lg font-bold text-sm transition shadow-lg shrink-0">UPDATE KASUS</button></div></div>
                         </div>
                     </div>
@@ -202,131 +193,88 @@
         // --- 1. LEGAL DATABASE (VERBATIM TEXT) ---
         const protocols = {
             "Korupsi": {
-                legal: { 
-                    title: "Korupsi / Suap / Gratifikasi", 
-                    pasal_code: "Pasal 2 ayat (1) & Pasal 3 UU 31/1999 jo. UU 20/2001",
-                    pasal_desc: "\"Setiap orang yang secara melawan hukum melakukan perbuatan memperkaya diri sendiri atau orang lain atau suatu korporasi yang dapat merugikan keuangan negara atau perekonomian negara...\" (Pasal 2). \"Setiap orang yang dengan tujuan menguntungkan diri sendiri... menyalahgunakan kewenangan...\" (Pasal 3).",
-                    prison: "4 - 20 Tahun Penjara",
-                    fine: "Rp 200 Juta - Rp 1 Miliar"
-                },
-                investigation: {
-                    docs: ["Dokumen Vendor Asli", "Rekening Koran Koperasi", "Bukti Transfer / Chat"],
-                    flags: ["Vendor tanpa tender", "Mark-up harga abnormal", "Kickback ke pengurus"],
-                    questions: ["Siapa merekomendasikan vendor ini?", "Kenapa harga jauh diatas pasar?", "Ada hubungan keluarga dengan vendor?"]
-                }
+                legal: { title: "Korupsi / Suap / Gratifikasi", pasal_code: "Pasal 2 ayat (1) & Pasal 3 UU 31/1999 jo. UU 20/2001", pasal_desc: "\"Setiap orang yang secara melawan hukum melakukan perbuatan memperkaya diri sendiri atau orang lain atau suatu korporasi yang dapat merugikan keuangan negara atau perekonomian negara...\" (Pasal 2). \"Setiap orang yang dengan tujuan menguntungkan diri sendiri... menyalahgunakan kewenangan...\" (Pasal 3).", prison: "4 - 20 Tahun Penjara", fine: "Rp 200 Juta - Rp 1 Miliar" },
+                investigation: { docs: ["Dokumen Vendor Asli", "Rekening Koran Koperasi", "Bukti Transfer / Chat"], flags: ["Vendor tanpa tender", "Mark-up harga abnormal", "Kickback ke pengurus"], questions: ["Siapa merekomendasikan vendor ini?", "Kenapa harga jauh diatas pasar?", "Ada hubungan keluarga dengan vendor?"] }
             },
             "Penggelapan": {
-                legal: { 
-                    title: "Penggelapan Dalam Jabatan", 
-                    pasal_code: "KUHP Pasal 372 & 374",
-                    pasal_desc: "\"Barang siapa dengan sengaja dan melawan hukum memiliki barang sesuatu yang seluruhnya atau sebagian adalah kepunyaan orang lain, tetapi yang ada dalam kekuasaannya bukan karena kejahatan...\" (Pasal 372). Diperberat jika dilakukan oleh orang yang memegang barang itu karena jabatannya (Pasal 374).",
-                    prison: "Maksimal 4 - 5 Tahun",
-                    fine: "Denda + Ganti Rugi Penuh"
-                },
-                investigation: {
-                    docs: ["Berita Acara Stock Opname", "Log Gudang / Kas", "CCTV Area Brankas"],
-                    flags: ["Selisih kas/stok berulang", "Barang keluar tanpa surat", "Gaya hidup mewah tiba-tiba"],
-                    questions: ["Jelaskan selisih ini?", "Siapa pemegang kunci selain Anda?", "Dimana fisik uang/barang sekarang?"]
-                }
+                legal: { title: "Penggelapan Dalam Jabatan", pasal_code: "KUHP Pasal 372 & 374", pasal_desc: "\"Barang siapa dengan sengaja dan melawan hukum memiliki barang sesuatu yang seluruhnya atau sebagian adalah kepunyaan orang lain, tetapi yang ada dalam kekuasaannya bukan karena kejahatan...\" (Pasal 372). Diperberat jika dilakukan oleh orang yang memegang barang itu karena jabatannya (Pasal 374).", prison: "Maksimal 4 - 5 Tahun", fine: "Denda + Ganti Rugi Penuh" },
+                investigation: { docs: ["Berita Acara Stock Opname", "Log Gudang / Kas", "CCTV Area Brankas"], flags: ["Selisih kas/stok berulang", "Barang keluar tanpa surat", "Gaya hidup mewah tiba-tiba"], questions: ["Jelaskan selisih ini?", "Siapa pemegang kunci selain Anda?", "Dimana fisik uang/barang sekarang?"] }
             },
             "Pemalsuan": {
-                legal: { 
-                    title: "Pemalsuan Dokumen / Laporan", 
-                    pasal_code: "KUHP Pasal 263 Ayat (1)",
-                    pasal_desc: "\"Barangsiapa dengan sengaja dan melawan hukum memalsukan surat-surat yang dapat menimbulkan kerugian bagi orang lain atau barangsiapa menyerahkan surat-surat yang dipalsukan itu seolah-olah asli...\"",
-                    prison: "Maksimal 6 Tahun",
-                    fine: "Sanksi Pidana"
-                },
-                investigation: {
-                    docs: ["Dokumen Asli (Bukan Copy)", "Log Audit Sistem", "Spesimen Tanda Tangan"],
-                    flags: ["Nomor faktur ganda", "Tanda tangan scan/crop", "Tanggal mundur (backdate)"],
-                    questions: ["Siapa yang mengetik dokumen?", "Kenapa tanggal mundur?", "Tunjukkan file asli di komputer Anda."]
-                }
+                legal: { title: "Pemalsuan Dokumen / Laporan", pasal_code: "KUHP Pasal 263 Ayat (1)", pasal_desc: "\"Barangsiapa dengan sengaja dan melawan hukum memalsukan surat-surat yang dapat menimbulkan kerugian bagi orang lain atau barangsiapa menyerahkan surat-surat yang dipalsukan itu seolah-olah asli...\"", prison: "Maksimal 6 Tahun", fine: "Sanksi Pidana" },
+                investigation: { docs: ["Dokumen Asli (Bukan Copy)", "Log Audit Sistem", "Spesimen Tanda Tangan"], flags: ["Nomor faktur ganda", "Tanda tangan scan/crop", "Tanggal mundur (backdate)"], questions: ["Siapa yang mengetik dokumen?", "Kenapa tanggal mundur?", "Tunjukkan file asli di komputer Anda."] }
             },
             "Pencurian": {
-                legal: { 
-                    title: "Pencurian Fisik / Kas", 
-                    pasal_code: "KUHP Pasal 362",
-                    pasal_desc: "\"Barangsiapa mengambil barang sesuatu, yang seluruhnya atau sebagian kepunyaan orang lain, dengan maksud untuk dimiliki secara melawan hukum...\" (Pencurian Biasa).",
-                    prison: "Maksimal 5 Tahun",
-                    fine: "Audit Restitusi (Ganti Rugi)"
-                },
-                investigation: {
-                    docs: ["Rekaman CCTV", "Log Akses Pintu", "Buku Tamu"],
-                    flags: ["CCTV mati saat kejadian", "Pintu rusak paksa", "Akses di luar jam kerja"],
-                    questions: ["Posisi Anda jam sekian?", "Kenapa ada di kantor malam itu?", "Siapa saksi Anda?"]
-                }
+                legal: { title: "Pencurian Fisik / Kas", pasal_code: "KUHP Pasal 362", pasal_desc: "\"Barangsiapa mengambil barang sesuatu, yang seluruhnya atau sebagian kepunyaan orang lain, dengan maksud untuk dimiliki secara melawan hukum...\" (Pencurian Biasa).", prison: "Maksimal 5 Tahun", fine: "Audit Restitusi (Ganti Rugi)" },
+                investigation: { docs: ["Rekaman CCTV", "Log Akses Pintu", "Buku Tamu"], flags: ["CCTV mati saat kejadian", "Pintu rusak paksa", "Akses di luar jam kerja"], questions: ["Posisi Anda jam sekian?", "Kenapa ada di kantor malam itu?", "Siapa saksi Anda?"] }
             },
             "SOP": {
-                legal: { 
-                    title: "Pelanggaran Berat SOP & Etika", 
-                    pasal_code: "UU 17/2012 (Pasal 64) & KUHP 372 (Jika Fraud)",
-                    pasal_desc: "\"Pengurus dapat diberhentikan berdasarkan keputusan Rapat Anggota...\" (Sanksi Internal). Jika unsur fraud terpenuhi, dikenakan pasal Penggelapan.",
-                    prison: "4 Tahun (Jika Fraud)",
-                    fine: "Pemecatan (PHK) + Pidana"
-                },
-                investigation: {
-                    docs: ["Data Absensi", "Kontrak Kerja (PKB)", "Saksi Rekan Kerja"],
-                    flags: ["Konflik kepentingan", "Nepotisme", "Mangkir kerja"],
-                    questions: ["Sadar aturan ini?", "Kenapa tidak lapor atasan?", "Alasan tindakan tersebut?"]
-                }
+                legal: { title: "Pelanggaran Berat SOP & Etika", pasal_code: "UU 17/2012 (Pasal 64) & KUHP 372 (Jika Fraud)", pasal_desc: "\"Pengurus dapat diberhentikan berdasarkan keputusan Rapat Anggota...\" (Sanksi Internal). Jika unsur fraud terpenuhi, dikenakan pasal Penggelapan.", prison: "4 Tahun (Jika Fraud)", fine: "Pemecatan (PHK) + Pidana" },
+                investigation: { docs: ["Data Absensi", "Kontrak Kerja (PKB)", "Saksi Rekan Kerja"], flags: ["Konflik kepentingan", "Nepotisme", "Mangkir kerja"], questions: ["Sadar aturan ini?", "Kenapa tidak lapor atasan?", "Alasan tindakan tersebut?"] }
             }
         };
 
-        // --- 2. REFINED SOP PELAPOR (Sesuai Konteks Hukum & Alhamdi Style) ---
+        // --- 2. SOP PELAPOR (RE-WRITTEN - TACTICAL) ---
         const sopSteps = [
             { 
-                id: 1, title: "Validasi Unsur Hukum", 
-                desc: "Jangan lapor sembarangan. Pastikan kasus memenuhi unsur pidana (Tipikor/372/374).", 
-                strat: "Gunakan logika 'Alat Bukti': Apakah ada dokumen? Apakah ada saksi? Jika hanya 'katanya', itu rumor.", 
-                dos: ["Cek apakah ada unsur 'Melawan Hukum'.", "Pastikan ada kerugian nyata."], 
-                donts: ["Melapor tanpa bukti dasar.", "Menggunakan asumsi pribadi."] 
+                id: 1, 
+                title: "Validasi & Niat", 
+                desc: "Pastikan laporan Anda memiliki dasar hukum, bukan hanya emosi. Apakah ini pelanggaran aturan tertulis?", 
+                strat: "Gunakan 'Matriks Kelayakan': 1. Apakah ada aturan tertulis yang dilanggar? 2. Apakah ada kerugian materiil/immateriil? 3. Apakah ini kejadian berulang?", 
+                dos: ["Cek aturan perusahaan/PKB.", "Hitung estimasi kerugian kasar.", "Fokus pada fakta, bukan orangnya."], 
+                donts: ["Melapor hanya karena tidak suka pribadi (Dislike).", "Melapor berdasarkan rumor/gosip kantin.", "Menebak-nebak tanpa data dasar."] 
             },
             { 
-                id: 2, title: "Keamanan Perangkat", 
-                desc: "Lindungi identitas Anda. Jangan gunakan aset kantor yang dipantau IT.", 
-                strat: "Prinsip 'Zero Trust'. Anggap semua PC kantor merekam aktivitas Anda.", 
-                dos: ["Gunakan HP/Laptop pribadi.", "Pakai Data Seluler (Bukan WiFi Kantor)."], 
-                donts: ["Login di komputer teman.", "Mengirim bukti via email kantor."] 
+                id: 2, 
+                title: "Isolasi Digital", 
+                desc: "Lindungi jejak digital Anda. Anggap semua perangkat kantor dipantau oleh admin IT (Keylogger/Screen Monitoring).", 
+                strat: "Prinsip 'Air Gap': Pisahkan aktivitas pelaporan dari jaringan kantor secara fisik.", 
+                dos: ["Gunakan HP/Laptop pribadi.", "Gunakan Paket Data Seluler sendiri (Matikan WiFi).", "Gunakan Browser Mode Incognito/Private."], 
+                donts: ["Menggunakan WiFi Kantor (Terlacak MAC Address).", "Login email pelapor di PC Kantor.", "Mengirim bukti ke email korporat."] 
             },
             { 
-                id: 3, title: "Pengumpulan Bukti Sah", 
-                desc: "Fokus pada 'Surat' dan 'Petunjuk' (Foto/Log) yang sah secara hukum.", 
-                strat: "Ambil foto dokumen asli diam-diam. Jangan ambil fisiknya (itu pencurian).", 
-                dos: ["Foto dokumen saat aman.", "Screenshot percakapan digital."], 
-                donts: ["Mencuri dokumen asli.", "Merekam suara/video ilegal (UU ITE)."] 
+                id: 3, 
+                title: "Dokumentasi Senyap", 
+                desc: "Kumpulkan bukti statis tanpa memicu kecurigaan. Jadilah 'Hantu' di sistem.", 
+                strat: "Bukti terbaik adalah yang tidak bisa disangkal (Dokumen, Log, Foto). Hindari bukti lisan yang bisa berubah.", 
+                dos: ["Foto layar komputer/dokumen fisik saat sepi.", "Screenshot chat/email mencurigakan.", "Simpan di Cloud Pribadi (Google Drive personal)."], 
+                donts: ["Membawa pulang dokumen asli (Itu Pencurian!).", "Mencolokkan Flashdisk pribadi ke PC Kantor (Terdeteksi USB Log).", "Merekam percakapan tanpa izin (Melanggar UU ITE)."] 
             },
             { 
-                id: 4, title: "Kronologi Terstruktur", 
-                desc: "Susun fakta 5W+1H untuk membuktikan 'Niat Jahat' (Mens Rea).", 
-                strat: "Urutkan waktu kejadian. Pola yang berulang menunjukkan kesengajaan.", 
-                dos: ["Catat: Siapa, Kapan, Dimana.", "Sebutkan nominal jika ada."], 
-                donts: ["Menggunakan kata emosional.", "Menuduh tanpa dasar."] 
+                id: 4, 
+                title: "Kronologi Taktis", 
+                desc: "Susun cerita yang memudahkan investigator bekerja. Fokus pada 5W+1H.", 
+                strat: "Urutkan kejadian berdasarkan waktu (Timeline). Ini memudahkan pencocokan dengan log CCTV atau Absensi.", 
+                dos: ["Tulis spesifik: Siapa, Kapan (Jam/Tgl), Dimana.", "Sebutkan nominal angka jika tahu.", "Gunakan bahasa netral & objektif."], 
+                donts: ["Menggunakan kata sifat emosional ('Dia jahat', 'Dia serakah').", "Mencampuradukkan fakta dengan opini pribadi.", "Menulis terlalu panjang dan berputar-putar."] 
             },
             { 
-                id: 5, title: "Lapor via SIAT", 
-                desc: "Kirim data terenkripsi. Sistem ini melindungi anonimitas Anda.", 
-                strat: "Isi data lengkap. Tiket ID adalah satu-satunya akses Anda.", 
-                dos: ["Simpan Tiket ID.", "Hapus riwayat browser."], 
-                donts: ["Sebar Tiket ID.", "Lapor ganda (Spam)."] 
+                id: 5, 
+                title: "Eksekusi Lapor", 
+                desc: "Kirim data melalui aplikasi WBS ini. Sistem menggunakan enkripsi satu arah.", 
+                strat: "Lakukan di luar jam kerja atau saat jam istirahat di lokasi sepi.", 
+                dos: ["Isi semua kolom wajib.", "Simpan Tiket ID di Catatan HP yang dikunci password.", "Langsung tutup tab browser setelah selesai."], 
+                donts: ["Share Tiket ID ke rekan kerja/keluarga.", "Melapor hal yang sama berulang-ulang (Spamming).", "Screenshot bukti lapor dan menyimpannya di Galeri umum."] 
             },
             { 
-                id: 6, title: "Operasi Senyap", 
-                desc: "Jangan ubah perilaku. Tetap bekerja seperti biasa (Business as Usual).", 
-                strat: "Jika pelaku curiga, investigasi akan gagal. Bersikaplah normal.", 
-                dos: ["Kerja profesional.", "Tetap ramah."], 
-                donts: ["Menghindar.", "Berbisik-bisik."] 
+                id: 6, 
+                title: "Mode Kamuflase", 
+                desc: "Kunci keberhasilan adalah perilaku Anda pasca-lapor. Jangan berubah!", 
+                strat: "Teknik 'Business as Usual': Jika Anda biasa pendiam, tetap diam. Jika biasa vokal, tetap vokal.", 
+                dos: ["Bekerja seperti biasa secara profesional.", "Tetap ramah pada terlapor jika berpapasan.", "Pura-pura kaget jika isu ini mencuat nanti."], 
+                donts: ["Tiba-tiba menghindar/gugup saat bertemu terlapor.", "Berbisik-bisik mencurigakan dengan rekan lain.", "Menyindir terlapor di status media sosial."] 
             },
             { 
-                id: 7, title: "Monitoring", 
-                desc: "Pantau status laporan. Tim mungkin butuh info tambahan.", 
-                strat: "Hanya buka aplikasi di tempat aman (rumah).", 
-                dos: ["Cek rutin.", "Jawab respon admin."], 
-                donts: ["Tanya pengurus langsung.", "Buka identitas."] 
+                id: 7, 
+                title: "Monitoring Aman", 
+                desc: "Pantau status laporan hanya melalui jalur aman.", 
+                strat: "Komunikasi hanya via fitur 'Cek Status' di aplikasi ini. Kami tidak akan menghubungi via WA/Telp.", 
+                dos: ["Cek status seminggu sekali di rumah.", "Jawab respon admin jika diminta bukti tambahan.", "Percayakan proses pada tim independen."], 
+                donts: ["Bertanya progres ke Pengurus/HRD secara langsung.", "Membuka identitas diri ('Saya yang lapor lho').", "Kecewa/marah terbuka jika proses terasa lambat."] 
             }
         ];
 
-        // --- 3. SOP ADMIN / AUDITOR ---
+        // --- 3. SOP ADMIN (Sama seperti v3.0) ---
         const adminSteps = [
             { id: 1, title: "Telaah Awal", icon: "🔍", desc: "Analisis laporan untuk memisahkan 'noise' dari 'signal'.", goal: "Validasi layak investigasi.", risk: "Investigasi Prematur: Pelaku kabur.", check: ["Cek 5W+1H.", "Cek wewenang terlapor.", "Hitung estimasi kerugian."] },
             { id: 2, title: "Bentuk Tim", icon: "👥", desc: "Tim steril dari konflik kepentingan.", goal: "Objektifitas & Kerahasiaan.", risk: "Kebocoran Internal.", check: ["Cek relasi tim-terlapor.", "Wajib NDA.", "Cover Story Audit."] },
@@ -337,7 +285,7 @@
         ];
 
         // --- CORE FUNCTIONS ---
-        const DB_KEY = 'siat_refined_v1';
+        const DB_KEY = 'siat_adaro_v3.1';
         function getDB() { return JSON.parse(localStorage.getItem(DB_KEY)) || []; }
         function saveDB(data) { localStorage.setItem(DB_KEY, JSON.stringify(data)); }
 
@@ -416,7 +364,7 @@
         }
 
         // Standard Functions
-        function switchRole(r) { const p=document.getElementById('publicZone'); const s=document.getElementById('secureZone'); const nav=document.getElementById('mainNav'); const bP=document.getElementById('btnPublic'); const bA=document.getElementById('btnAdmin'); if(r==='public'){ p.classList.remove('-translate-x-full'); s.classList.add('translate-x-full'); nav.classList.replace('bg-slate-900','bg-white'); nav.classList.replace('border-slate-800','border-slate-200'); bP.classList.add('bg-white','shadow-sm','text-teal-700','ring-1'); bP.classList.remove('text-slate-500'); bA.classList.remove('bg-slate-800','text-white'); bA.classList.add('text-slate-500'); document.getElementById('appTitle').className="font-bold text-lg tracking-tight text-slate-800 block"; document.getElementById('logoIcon').className="bg-teal-700 text-white w-9 h-9 rounded flex items-center justify-center font-bold shadow-sm text-lg"; } else { p.classList.add('-translate-x-full'); s.classList.remove('translate-x-full'); nav.classList.replace('bg-white','bg-slate-900'); nav.classList.replace('border-slate-200','border-slate-800'); bA.classList.add('bg-slate-800','text-white'); bA.classList.remove('text-slate-500'); bP.classList.remove('bg-white','shadow-sm','text-teal-700','ring-1'); bP.classList.add('text-slate-500'); document.getElementById('appTitle').className="font-bold text-lg tracking-tight text-white block"; document.getElementById('logoIcon').className="bg-red-700 text-white w-9 h-9 rounded flex items-center justify-center font-bold shadow-sm text-lg"; } }
+        function switchRole(r) { const p=document.getElementById('publicZone'); const s=document.getElementById('secureZone'); const nav=document.getElementById('mainNav'); const bP=document.getElementById('btnPublic'); const bA=document.getElementById('btnAdmin'); if(r==='public'){ p.classList.remove('-translate-x-full'); s.classList.add('translate-x-full'); nav.classList.replace('bg-slate-900','bg-white'); nav.classList.replace('border-slate-800','border-slate-200'); bP.classList.add('bg-white','shadow-sm','text-teal-700','ring-1'); bP.classList.remove('text-slate-500'); bA.classList.remove('bg-slate-800','text-white'); bA.classList.add('text-slate-500'); document.getElementById('appTitle').className="font-bold text-lg tracking-tight text-slate-800 block uppercase"; document.getElementById('zoneLabel').className="text-[11px] font-bold uppercase tracking-widest text-teal-600 block"; } else { p.classList.add('-translate-x-full'); s.classList.remove('translate-x-full'); nav.classList.replace('bg-white','bg-slate-900'); nav.classList.replace('border-slate-200','border-slate-800'); bA.classList.add('bg-slate-800','text-white'); bA.classList.remove('text-slate-500'); bP.classList.remove('bg-white','shadow-sm','text-teal-700','ring-1'); bP.classList.add('text-slate-500'); document.getElementById('appTitle').className="font-bold text-lg tracking-tight text-white block uppercase"; document.getElementById('zoneLabel').className="text-[11px] font-bold uppercase tracking-widest text-slate-500 block"; } }
         function setPublicTab(t) { ['guide','report','track'].forEach(x=>{ document.getElementById(`content-${x}`).classList.add('hidden'); document.getElementById(`tab-${x}`).classList.replace('border-teal-600','border-transparent'); document.getElementById(`tab-${x}`).classList.replace('text-teal-700','text-slate-500'); }); document.getElementById(`content-${t}`).classList.remove('hidden'); document.getElementById(`tab-${t}`).classList.replace('border-transparent','border-teal-600'); document.getElementById(`tab-${t}`).classList.replace('text-slate-500','text-teal-700'); }
         function authAdmin() { if(document.getElementById('adminPass').value==='audit2024'){ document.getElementById('adminLogin').classList.add('hidden'); document.getElementById('adminDash').classList.remove('hidden'); loadReports(); switchAdminTab('workspace'); } else document.getElementById('loginErr').classList.remove('hidden'); }
         function logoutAdmin() { location.reload(); }
