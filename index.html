@@ -7,42 +7,114 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-    <!-- 
-      WBS v3.2 MOBILE OPTIMIZATION LOG:
-      1. LAYOUT: Converted rigid grids to responsive flex-cols. Mobile uses stacking, Desktop uses side-by-side.
-      2. NAVIGATION: Added overflow-x-auto for tabs to prevent breaking on small screens.
-      3. ADMIN UX: Implemented "Master-Detail" view logic for mobile (List View <-> Detail View toggling).
-      4. CONTENT: 100% Preserved original text and logic from v3.1.
-      5. INTERACTION: Added auto-scroll to details when clicking steps on mobile.
-    -->
+    <!-- FIREBASE INTEGRATION -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // CONFIG (Gunakan Config Anda)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDf6wxmYtxDpj4Sd1Pd2a2vjFHU-O_fLV8",
+            authDomain: "wbs-adaro-koperasi.firebaseapp.com",
+            projectId: "wbs-adaro-koperasi",
+            storageBucket: "wbs-adaro-koperasi.firebasestorage.app",
+            messagingSenderId: "819098429250",
+            appId: "1:819098429250:web:1a9c1af14d009e89e18adb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const COLLECTION_NAME = 'laporan_masuk';
+
+        window.globalReports = [];
+        window.isDbReady = false;
+
+        async function initSystem() {
+            try {
+                await signInAnonymously(auth);
+                console.log("Connected to DB");
+                const colRef = collection(db, COLLECTION_NAME);
+                onSnapshot(colRef, (snapshot) => {
+                    window.globalReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    window.isDbReady = true;
+                    if (!document.getElementById('adminDash').classList.contains('hidden')) {
+                        window.renderAdminList();
+                    }
+                }, (err) => console.error("Sync Error:", err));
+            } catch (error) {
+                console.error("Auth Failed:", error);
+                alert("Gagal koneksi server. Cek internet.");
+            }
+        }
+
+        // Helper: Convert File to Base64
+        const fileToBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        };
+
+        window.sendReportToCloud = async (data, file) => {
+            if (!window.isDbReady) { alert("Menghubungkan ke database..."); return false; }
+            try {
+                // Handle File Attachment
+                if (file) {
+                    if (file.size > 500 * 1024) { // 500KB Limit for Firestore Doc
+                        alert("Ukuran file terlalu besar (Max 500KB). Mohon kompres atau kirim bukti teks saja.");
+                        return false;
+                    }
+                    const base64File = await fileToBase64(file);
+                    data.attachment = base64File;
+                    data.attachmentName = file.name;
+                    data.attachmentType = file.type;
+                }
+
+                const colRef = collection(db, COLLECTION_NAME);
+                await addDoc(colRef, data);
+                return true;
+            } catch (e) {
+                alert("Gagal kirim: " + e.message);
+                return false;
+            }
+        };
+
+        window.updateReportInCloud = async (docId, newData) => {
+            try {
+                const docRef = doc(db, COLLECTION_NAME, docId);
+                await updateDoc(docRef, newData);
+                return true;
+            } catch (e) {
+                alert("Gagal update: " + e.message);
+                return false;
+            }
+        };
+
+        initSystem();
+    </script>
 
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
-        .fade-in { animation: fadeIn 0.3s ease-out; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Custom Scrollbar - thinner for mobile elegance */
         .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        
         .step-line { position: absolute; left: 23px; top: 45px; bottom: -20px; width: 2px; background-color: #cbd5e1; z-index: 0; }
         .last-step .step-line { display: none; }
         .admin-step-line { position: absolute; left: 23px; top: 45px; bottom: -20px; width: 2px; background-color: #475569; z-index: 0; }
-
-        /* Mobile Helper Classes */
         .mobile-hidden { display: none; }
-        @media (min-width: 1024px) {
-            .mobile-hidden { display: block; }
-            .desktop-hidden { display: none; }
-        }
+        @media (min-width: 1024px) { .mobile-hidden { display: block; } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen flex flex-col overflow-hidden">
 
-    <!-- NAVBAR (Responsive) -->
+    <!-- NAVBAR -->
     <nav id="mainNav" class="bg-white border-b border-slate-200 transition-colors duration-300 z-50 shrink-0 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
             <div class="flex items-center gap-3 overflow-hidden">
@@ -62,85 +134,53 @@
     <!-- MAIN CONTENT -->
     <main class="flex-grow relative overflow-hidden">
         
-        <!-- ================= PUBLIC ZONE ================= -->
+        <!-- PUBLIC ZONE -->
         <div id="publicZone" class="absolute inset-0 flex flex-col overflow-hidden transition-transform duration-300 bg-slate-50">
             <div class="flex flex-col h-full max-w-7xl mx-auto w-full">
-                
-                <!-- Tabs (Scrollable on Mobile) -->
+                <!-- Tabs -->
                 <div class="flex border-b border-slate-200 bg-white px-4 md:px-8 space-x-6 overflow-x-auto custom-scroll shrink-0 whitespace-nowrap">
                     <button onclick="setPublicTab('guide')" class="py-3 md:py-4 border-b-2 border-teal-600 font-bold text-teal-700 text-sm md:text-base transition" id="tab-guide">Panduan SOP</button>
                     <button onclick="setPublicTab('report')" class="py-3 md:py-4 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 text-sm md:text-base transition" id="tab-report">Formulir Laporan</button>
                     <button onclick="setPublicTab('track')" class="py-3 md:py-4 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 text-sm md:text-base transition" id="tab-track">Cek Status</button>
                 </div>
 
-                <!-- Content Area -->
+                <!-- Content -->
                 <div class="flex-grow overflow-y-auto custom-scroll p-4 md:p-6 lg:p-8 scroll-smooth" id="publicContentArea">
                     
-                    <!-- 1. SOP GUIDE (Responsive Stack) -->
+                    <!-- 1. SOP GUIDE -->
                     <div id="content-guide" class="fade-in grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 h-full">
-                        <!-- Navigation (Top on Mobile, Left on Desktop) -->
-                        <div class="lg:col-span-4 space-y-0 relative pb-6 lg:pb-10 lg:pr-2 lg:h-auto lg:overflow-visible" id="flowContainer">
-                            <!-- JS Injected Steps -->
-                        </div>
-                        
-                        <!-- Detail Panel (Bottom on Mobile, Right on Desktop) -->
+                        <div class="lg:col-span-4 space-y-0 relative pb-6 lg:pb-10 lg:pr-2 lg:h-auto lg:overflow-visible" id="flowContainer"></div>
                         <div class="lg:col-span-8">
                             <div class="bg-white p-5 md:p-8 rounded-2xl border border-slate-200 shadow-sm h-fit sticky top-0" id="guideDetailCard">
                                 <div id="guideDetail" class="hidden">
                                     <span id="gStep" class="text-[10px] font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100 mb-3 md:mb-4 inline-block tracking-widest uppercase"></span>
                                     <h3 id="gTitle" class="text-xl md:text-3xl font-bold text-slate-900 mb-2 md:mb-3 tracking-tight"></h3>
                                     <p id="gDesc" class="text-sm md:text-lg text-slate-600 mb-6 md:mb-8 leading-relaxed border-b border-slate-100 pb-4 md:pb-6"></p>
-                                    
                                     <div class="space-y-4 md:space-y-6">
-                                        <!-- Strategy -->
-                                        <div class="bg-indigo-50/50 p-4 md:p-6 rounded-xl border border-indigo-100">
-                                            <h4 class="font-bold text-indigo-900 text-xs mb-2 md:mb-3 uppercase tracking-wider flex items-center gap-2">
-                                                <span class="w-5 h-5 md:w-6 md:h-6 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 text-[10px] md:text-xs font-bold">S</span>
-                                                Strategi Taktis
-                                            </h4>
-                                            <p id="gStrat" class="text-xs md:text-sm text-indigo-950 leading-relaxed font-medium"></p>
-                                        </div>
-
-                                        <!-- Action Grid -->
+                                        <div class="bg-indigo-50/50 p-4 md:p-6 rounded-xl border border-indigo-100"><h4 class="font-bold text-indigo-900 text-xs mb-2 md:mb-3 uppercase tracking-wider">Strategi Taktis</h4><p id="gStrat" class="text-xs md:text-sm text-indigo-950 leading-relaxed font-medium"></p></div>
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-                                            <div class="bg-teal-50/50 p-4 md:p-5 rounded-xl border border-teal-100">
-                                                <h4 class="font-bold text-teal-800 text-xs uppercase mb-2 md:mb-3 flex items-center gap-2">
-                                                    <span class="text-teal-600">✓</span> Protokol Wajib
-                                                </h4>
-                                                <ul id="gDos" class="list-disc ml-4 text-xs md:text-sm text-teal-900 space-y-1.5 leading-snug"></ul>
-                                            </div>
-                                            <div class="bg-rose-50/50 p-4 md:p-5 rounded-xl border border-rose-100">
-                                                <h4 class="font-bold text-rose-800 text-xs uppercase mb-2 md:mb-3 flex items-center gap-2">
-                                                    <span class="text-rose-600">✕</span> Pantangan Fatal
-                                                </h4>
-                                                <ul id="gDonts" class="list-disc ml-4 text-xs md:text-sm text-rose-900 space-y-1.5 leading-snug"></ul>
-                                            </div>
+                                            <div class="bg-teal-50/50 p-4 md:p-5 rounded-xl border border-teal-100"><h4 class="font-bold text-teal-800 text-xs uppercase mb-2 md:mb-3">✓ Protokol Wajib</h4><ul id="gDos" class="list-disc ml-4 text-xs md:text-sm text-teal-900 space-y-1.5 leading-snug"></ul></div>
+                                            <div class="bg-rose-50/50 p-4 md:p-5 rounded-xl border border-rose-100"><h4 class="font-bold text-rose-800 text-xs uppercase mb-2 md:mb-3">✕ Pantangan Fatal</h4><ul id="gDonts" class="list-disc ml-4 text-xs md:text-sm text-rose-900 space-y-1.5 leading-snug"></ul></div>
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Empty State -->
-                                <div id="guideEmpty" class="h-40 md:h-96 flex flex-col items-center justify-center text-slate-300">
-                                    <div class="text-4xl md:text-6xl mb-2 md:mb-4 grayscale opacity-20">📚</div>
-                                    <p class="text-xs md:text-sm font-bold text-slate-400 text-center px-4">Pilih tahapan di atas/samping untuk melihat detail SOP.</p>
-                                </div>
+                                <div id="guideEmpty" class="h-40 md:h-96 flex flex-col items-center justify-center text-slate-300"><div class="text-4xl md:text-6xl mb-2 md:mb-4 grayscale opacity-20">📚</div><p class="text-xs md:text-sm font-bold text-slate-400 text-center px-4">Pilih tahapan SOP.</p></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 2. REPORT FORM (Responsive Stack) -->
+                    <!-- 2. REPORT FORM -->
                     <div id="content-report" class="hidden fade-in max-w-6xl mx-auto pb-20">
                         <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col lg:flex-row">
-                            <!-- Form -->
                             <div class="w-full lg:w-7/12 p-5 md:p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-slate-100">
-                                <div class="mb-6">
-                                    <h2 class="text-xl md:text-2xl font-bold text-slate-800">Formulir Laporan Aman</h2>
-                                    <p class="text-xs md:text-sm text-slate-500 mt-1">Sistem menggunakan enkripsi satu arah. Identitas Anda aman.</p>
-                                </div>
-                                <form onsubmit="submitReport(event)" class="space-y-4 md:space-y-5">
-                                    <div class="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200 transition-all hover:shadow-sm">
-                                        <label class="block text-xs font-bold text-yellow-800 uppercase mb-2 tracking-wide">1. Kategori Pelanggaran (Wajib)</label>
-                                        <select id="inKategori" onchange="updateLegalInfo()" required class="w-full p-2.5 md:p-3 border border-yellow-300 rounded-lg bg-white focus:ring-4 focus:ring-yellow-100 outline-none text-sm font-bold text-slate-700 cursor-pointer">
-                                            <option value="" disabled selected>-- Pilih Jenis Kasus untuk Cek Sanksi --</option>
+                                <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-6">Formulir Laporan Aman</h2>
+                                <form onsubmit="submitReportHandler(event)" class="space-y-4 md:space-y-5">
+                                    
+                                    <!-- 1. KATEGORI -->
+                                    <div class="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200">
+                                        <label class="block text-xs font-bold text-yellow-800 uppercase mb-2">1. Kategori Pelanggaran</label>
+                                        <select id="inKategori" onchange="updateLegalInfo()" required class="w-full p-2.5 md:p-3 border border-yellow-300 rounded-lg bg-white focus:ring-4 focus:ring-yellow-100 outline-none text-sm font-bold text-slate-700">
+                                            <option value="" disabled selected>-- Pilih Jenis Kasus --</option>
                                             <option value="Korupsi">Korupsi / Suap / Gratifikasi</option>
                                             <option value="Penggelapan">Penggelapan Jabatan (Aset/Uang)</option>
                                             <option value="Pemalsuan">Pemalsuan Dokumen / Laporan</option>
@@ -148,50 +188,65 @@
                                             <option value="SOP">Pelanggaran Berat SOP & Etika</option>
                                         </select>
                                     </div>
+
+                                    <!-- 2 & 3. IDENTITAS & WAKTU -->
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-                                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Terlapor</label><input type="text" id="inTerlapor" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Nama / Jabatan"></div>
-                                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Tanggal Kejadian</label><input type="date" id="inWaktu" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm"></div>
+                                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Terlapor</label><input type="text" id="inTerlapor" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm"></div>
+                                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Tanggal</label><input type="date" id="inWaktu" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm"></div>
                                     </div>
-                                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">4. Kronologi (5W+1H)</label><textarea id="inKronologi" rows="5" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Jelaskan urutan kejadian secara logis. Jangan gunakan asumsi."></textarea></div>
-                                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">5. Bukti Awal</label><textarea id="inBukti" rows="2" placeholder="Sebutkan bukti yang Anda miliki..." required class="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white transition text-sm"></textarea></div>
-                                    <button type="submit" class="w-full bg-slate-900 text-white font-bold py-3 md:py-4 rounded-xl hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2 text-sm md:text-base">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+
+                                    <!-- 4. KRONOLOGI (5W+1H) -->
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">
+                                            <span>4. Kronologi (5W + 1H)</span>
+                                            <span class="text-teal-600 text-[10px]">Wajib Detail</span>
+                                        </label>
+                                        <div class="bg-blue-50 p-3 rounded-t-lg border border-blue-100 border-b-0">
+                                            <p class="text-[10px] text-blue-800 font-medium">
+                                                💡 <strong>Panduan 5W+1H:</strong><br>
+                                                • <strong>Who:</strong> Siapa pelakunya?<br>
+                                                • <strong>When:</strong> Kapan kejadiannya (Hari, Jam)?<br>
+                                                • <strong>Where:</strong> Dimana lokasinya?<br>
+                                                • <strong>What:</strong> Apa yang dilakukan?<br>
+                                                • <strong>Why:</strong> Mengapa itu pelanggaran?<br>
+                                                • <strong>How:</strong> Bagaimana caranya?
+                                            </p>
+                                        </div>
+                                        <textarea id="inKronologi" rows="6" required class="w-full p-3 border border-slate-300 rounded-b-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Contoh: Pada hari Senin (20/10) di Gudang A, Saudara X terlihat memindahkan barang tanpa surat jalan..."></textarea>
+                                    </div>
+
+                                    <!-- 5. BUKTI (UPLOAD) -->
+                                    <div class="space-y-2">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">5. Bukti Awal (Upload / Teks)</label>
+                                        
+                                        <!-- Text Input -->
+                                        <textarea id="inBukti" rows="2" class="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white transition text-sm" placeholder="Deskripsikan bukti Anda disini..."></textarea>
+                                        
+                                        <!-- File Upload -->
+                                        <div class="relative border-2 border-dashed border-slate-300 rounded-lg p-4 hover:bg-slate-50 transition text-center cursor-pointer group">
+                                            <input type="file" id="inFile" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,.pdf">
+                                            <div class="space-y-1">
+                                                <svg class="mx-auto h-8 w-8 text-slate-400 group-hover:text-teal-500 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                                <div class="text-xs text-slate-500"><span class="font-bold text-teal-600">Klik Upload</span> atau Foto Langsung</div>
+                                                <p class="text-[10px] text-slate-400">Max 500KB (JPG/PNG/PDF)</p>
+                                            </div>
+                                            <p id="fileName" class="text-xs font-bold text-teal-700 mt-2 hidden"></p>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" id="btnSubmitForm" class="w-full bg-slate-900 text-white font-bold py-3 md:py-4 rounded-xl hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2 text-sm md:text-base">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                                         KIRIM LAPORAN
                                     </button>
                                 </form>
                             </div>
-                            
-                            <!-- Legal Side (Stacked below form on mobile) -->
                             <div class="w-full lg:w-5/12 bg-slate-50/50 p-5 md:p-8 lg:p-10 flex flex-col justify-center lg:border-l border-slate-100">
                                 <div id="legalContent" class="hidden animate-pulse-once">
                                     <div class="flex items-center gap-3 mb-4 md:mb-6"><div class="p-2 bg-red-100 rounded text-red-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg></div><h3 class="text-lg md:text-xl font-bold text-slate-900 uppercase tracking-tight">Kartu Hukum</h3></div>
-                                    
-                                    <div class="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm mb-4 md:mb-5">
-                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Dasar Hukum</span>
-                                        <h4 id="lPasalTitle" class="text-base md:text-lg font-bold text-slate-900 leading-tight mb-3"></h4>
-                                        <div class="font-mono text-xs text-slate-600 bg-slate-100 p-3 rounded border border-slate-200 leading-relaxed" id="lPasalDesc"></div>
-                                    </div>
-
-                                    <div class="bg-red-50 p-4 md:p-6 rounded-xl border border-red-100 relative overflow-hidden">
-                                        <div class="absolute -right-6 -top-6 text-red-100 opacity-50"><svg class="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg></div>
-                                        <span class="text-[10px] font-bold text-red-800 uppercase tracking-wider block mb-4 relative z-10">Ancaman Sanksi Maksimal</span>
-                                        <div class="space-y-4 relative z-10">
-                                            <div class="flex items-center gap-4">
-                                                <div class="bg-white p-2 rounded-lg shadow-sm text-xl">👮</div>
-                                                <div><span class="text-[10px] font-bold text-red-900 uppercase block opacity-70">Pidana Penjara</span><span id="lPrison" class="text-sm md:text-base font-bold text-red-700"></span></div>
-                                            </div>
-                                            <div class="flex items-center gap-4">
-                                                <div class="bg-white p-2 rounded-lg shadow-sm text-xl">💸</div>
-                                                <div><span class="text-[10px] font-bold text-red-900 uppercase block opacity-70">Denda / Ganti Rugi</span><span id="lFine" class="text-sm md:text-base font-bold text-red-700"></span></div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <div class="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm mb-4 md:mb-5"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Dasar Hukum</span><h4 id="lPasalTitle" class="text-base md:text-lg font-bold text-slate-900 leading-tight mb-3"></h4><div class="font-mono text-xs text-slate-600 bg-slate-100 p-3 rounded border border-slate-200 leading-relaxed" id="lPasalDesc"></div></div>
+                                    <div class="bg-red-50 p-4 md:p-6 rounded-xl border border-red-100 relative"><span class="text-[10px] font-bold text-red-800 uppercase tracking-wider block mb-4 relative z-10">Ancaman Sanksi</span><div class="space-y-4 relative z-10"><div class="flex items-center gap-4"><div class="bg-white p-2 rounded-lg shadow-sm text-xl">👮</div><div><span class="text-[10px] font-bold text-red-900 uppercase block opacity-70">Penjara</span><span id="lPrison" class="text-sm md:text-base font-bold text-red-700"></span></div></div><div class="flex items-center gap-4"><div class="bg-white p-2 rounded-lg shadow-sm text-xl">💸</div><div><span class="text-[10px] font-bold text-red-900 uppercase block opacity-70">Denda</span><span id="lFine" class="text-sm md:text-base font-bold text-red-700"></span></div></div></div></div>
                                 </div>
-                                <div id="legalEmpty" class="text-center text-slate-300 py-10 lg:py-20">
-                                    <div class="text-5xl md:text-7xl mb-4 md:mb-6 grayscale opacity-30">⚖️</div>
-                                    <p class="text-xs md:text-sm font-bold text-slate-400">PILIH KATEGORI DI ATAS</p>
-                                    <p class="text-[10px] md:text-xs mt-1">Sistem akan menampilkan pasal pidana & sanksi.</p>
-                                </div>
+                                <div id="legalEmpty" class="text-center text-slate-300 py-10 lg:py-20"><div class="text-5xl md:text-7xl mb-4 md:mb-6 grayscale opacity-30">⚖️</div><p class="text-xs md:text-sm font-bold text-slate-400">PILIH KATEGORI</p></div>
                             </div>
                         </div>
                     </div>
@@ -199,142 +254,82 @@
                     <!-- 3. TRACKING -->
                     <div id="content-track" class="hidden fade-in max-w-xl mx-auto pt-10 md:pt-16 text-center">
                         <div class="bg-white p-6 md:p-8 rounded-2xl shadow-lg border border-slate-100">
-                            <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-2">Pelacakan Anonim</h2>
-                            <p class="text-slate-500 mb-6 md:mb-8 text-xs md:text-sm">Gunakan Tiket ID Anda. Kami tidak menyimpan data pribadi.</p>
-                            <input type="text" id="trackInput" placeholder="#TICKET-XXXX" class="w-full p-3 md:p-4 border-2 rounded-xl text-center font-mono uppercase text-lg md:text-2xl mb-4 md:mb-6 focus:border-teal-500 outline-none tracking-widest text-slate-700 placeholder-slate-300">
-                            <button onclick="checkStatus()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition text-sm md:text-base">CEK STATUS LAPORAN</button>
-                            
-                            <div id="trackResult" class="hidden mt-8 text-left bg-slate-50 p-6 rounded-xl border border-slate-200">
-                                <div class="flex justify-between items-center mb-4"><span class="text-xs font-bold text-slate-400 uppercase">Status Terkini</span><span id="tBadge" class="px-3 py-1 rounded-full text-xs font-bold"></span></div>
-                                <p id="tMsg" class="text-base md:text-lg font-medium text-slate-800 mb-4"></p>
-                                <div class="bg-white p-4 rounded border border-slate-100"><span class="text-xs font-bold text-slate-400 uppercase block mb-1">Pesan Pengawas</span><p id="tResp" class="text-sm text-slate-600 italic"></p></div>
-                            </div>
+                            <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-2">Pelacakan Database</h2>
+                            <p class="text-slate-500 mb-6 md:mb-8 text-xs md:text-sm">Gunakan Tiket ID Anda. Data tersinkronisasi realtime.</p>
+                            <input type="text" id="trackInput" placeholder="#TICKET-XXXX" class="w-full p-3 md:p-4 border-2 rounded-xl text-center font-mono uppercase text-lg md:text-2xl mb-4 md:mb-6 focus:border-teal-500 outline-none tracking-widest text-slate-700">
+                            <button onclick="checkStatusCloud()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition text-sm md:text-base">CEK STATUS SERVER</button>
+                            <div id="trackResult" class="hidden mt-8 text-left bg-slate-50 p-6 rounded-xl border border-slate-200"><div class="flex justify-between items-center mb-4"><span class="text-xs font-bold text-slate-400 uppercase">Status Terkini</span><span id="tBadge" class="px-3 py-1 rounded-full text-xs font-bold"></span></div><p id="tMsg" class="text-base md:text-lg font-medium text-slate-800 mb-4"></p><div class="bg-white p-4 rounded border border-slate-100"><span class="text-xs font-bold text-slate-400 uppercase block mb-1">Pesan Pengawas</span><p id="tResp" class="text-sm text-slate-600 italic"></p></div></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- ================= SECURE ZONE (ADMIN) ================= -->
+        <!-- SECURE ZONE (ADMIN) -->
         <div id="secureZone" class="absolute inset-0 flex flex-col bg-slate-900 text-slate-300 translate-x-full transition-transform duration-300">
-            <!-- Login -->
             <div id="adminLogin" class="absolute inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center p-4">
                 <div class="bg-slate-800 p-6 md:p-10 rounded-2xl border border-slate-700 w-full max-w-sm text-center shadow-2xl">
                     <div class="text-4xl md:text-5xl mb-4 md:mb-6">🛡️</div>
-                    <h2 class="text-lg md:text-xl font-bold text-white mb-1 font-mono tracking-tight">PENGAWAS ACCESS</h2>
-                    <p class="text-[10px] md:text-xs text-slate-500 mb-6 md:mb-8">Area Terbatas Tim Investigasi</p>
-                    <input type="password" id="adminPass" placeholder="Kode Otorisasi" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-center text-white mb-4 focus:border-red-500 outline-none transition font-mono text-sm">
-                    <button onclick="authAdmin()" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded-lg transition tracking-wide text-sm">BUKA AKSES</button>
+                    <h2 class="text-lg md:text-xl font-bold text-white mb-1 font-mono">CLOUD ADMIN</h2>
+                    <input type="password" id="adminPass" placeholder="Kode Otorisasi" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-center text-white mb-4 mt-6 focus:border-red-500 outline-none font-mono text-sm">
+                    <button onclick="authAdmin()" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded-lg transition tracking-wide text-sm">LOGIN</button>
                     <p id="loginErr" class="text-red-500 text-xs mt-4 hidden font-mono bg-red-900/20 py-1 rounded">AKSES DITOLAK</p>
                 </div>
             </div>
 
-            <!-- Dashboard -->
             <div id="adminDash" class="flex-grow flex flex-col hidden h-full">
                 <div class="bg-slate-950 px-4 md:px-6 py-3 md:py-4 border-b border-slate-800 flex justify-between items-center shrink-0">
-                    <div class="flex items-center gap-4 md:gap-6 overflow-hidden">
-                        <h2 class="font-bold text-white tracking-wide text-xs md:text-sm font-mono border-r border-slate-700 pr-4 md:pr-6 truncate">WORKSPACE</h2>
-                        <div class="flex space-x-2">
-                            <button onclick="switchAdminTab('workspace')" id="btnAdmWork" class="text-[10px] md:text-xs font-bold px-2 md:px-3 py-1.5 rounded bg-red-900/30 text-red-300 border border-red-900/50 transition whitespace-nowrap">KASUS</button>
-                            <button onclick="switchAdminTab('guide')" id="btnAdmGuide" class="text-[10px] md:text-xs font-bold px-2 md:px-3 py-1.5 rounded text-slate-500 hover:text-slate-300 transition whitespace-nowrap">SOP AUDIT</button>
-                        </div>
+                    <div class="flex items-center gap-4">
+                        <h2 class="font-bold text-white tracking-wide text-xs md:text-sm font-mono border-r border-slate-700 pr-4">WORKSPACE</h2>
+                        <div class="flex space-x-2"><button onclick="switchAdminTab('workspace')" id="btnAdmWork" class="text-[10px] font-bold px-2 py-1.5 rounded bg-red-900/30 text-red-300 border border-red-900/50">KASUS</button><button onclick="switchAdminTab('guide')" id="btnAdmGuide" class="text-[10px] font-bold px-2 py-1.5 rounded text-slate-500 hover:text-slate-300">SOP</button></div>
                     </div>
-                    <button onclick="logoutAdmin()" class="text-[10px] text-red-400 font-bold border border-red-900 px-2 md:px-3 py-1 rounded bg-red-900/10 hover:bg-red-900/30 transition ml-2">KELUAR</button>
+                    <button onclick="logoutAdmin()" class="text-[10px] text-red-400 font-bold border border-red-900 px-2 md:px-3 py-1 rounded bg-red-900/10">KELUAR</button>
                 </div>
 
-                <!-- ADMIN VIEW 1: WORKSPACE (Mobile Optimized: Master-Detail) -->
                 <div id="admViewWorkspace" class="flex flex-grow overflow-hidden fade-in relative">
-                    
-                    <!-- Case List (Master) -->
                     <div id="adminMasterList" class="w-full lg:w-80 border-r border-slate-800 bg-slate-900 overflow-y-auto custom-scroll shrink-0 absolute lg:relative inset-0 z-10">
-                        <div class="p-4 border-b border-slate-800 sticky top-0 bg-slate-900 z-10 flex justify-between items-center">
-                            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Antrean Kasus</h3>
-                            <span class="text-[10px] text-slate-600 lg:hidden">Ketuk untuk detail</span>
-                        </div>
+                        <div class="p-4 border-b border-slate-800 sticky top-0 bg-slate-900 z-10 flex justify-between"><h3 class="text-[10px] font-bold text-slate-500 uppercase">Live Reports</h3><span class="text-[10px] text-slate-600 lg:hidden">Tap to view</span></div>
                         <div id="reportList" class="divide-y divide-slate-800"></div>
-                        <div id="emptyAdmin" class="p-10 text-center text-slate-600 text-xs hidden">Tidak ada laporan aktif.</div>
+                        <div id="emptyAdmin" class="p-10 text-center text-slate-600 text-xs hidden">Menunggu data cloud...</div>
                     </div>
-
-                    <!-- Case Detail (Detail) -->
                     <div id="adminDetailPanel" class="w-full lg:flex-grow bg-slate-800 overflow-y-auto custom-scroll p-4 md:p-8 absolute lg:relative inset-0 z-20 translate-x-full lg:translate-x-0 transition-transform duration-300">
-                        
-                        <!-- Mobile Back Button -->
-                        <div class="lg:hidden mb-4">
-                            <button onclick="closeAdminDetailMobile()" class="flex items-center text-slate-400 hover:text-white text-sm font-bold">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                                KEMBALI KE DAFTAR
-                            </button>
-                        </div>
-
-                        <div id="workspaceEmpty" class="h-full hidden lg:flex flex-col items-center justify-center text-slate-600 opacity-30">
-                            <div class="text-6xl mb-4">📂</div><p class="font-mono text-sm uppercase">Pilih Kasus di Kiri</p>
-                        </div>
-
+                        <div class="lg:hidden mb-4"><button onclick="closeAdminDetailMobile()" class="flex items-center text-slate-400 text-sm font-bold"><svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>KEMBALI</button></div>
+                        <div id="workspaceEmpty" class="h-full hidden lg:flex flex-col items-center justify-center text-slate-600 opacity-30"><div class="text-6xl mb-4">📂</div><p class="font-mono text-sm uppercase">Pilih Kasus</p></div>
                         <div id="workspaceDetail" class="hidden fade-in max-w-5xl mx-auto pb-20">
-                            <div class="flex flex-col md:flex-row justify-between items-start mb-6 md:mb-8 border-b border-slate-700 pb-6 gap-4">
-                                <div class="w-full">
-                                    <div class="flex gap-3 mb-2 items-center">
-                                        <span id="dTicket" class="font-mono text-red-400 text-xs font-bold bg-red-900/20 px-2 py-1 rounded border border-red-900/30"></span>
-                                        <span id="dDate" class="font-mono text-slate-400 text-[10px]"></span>
+                            <div class="flex justify-between items-start mb-6 border-b border-slate-700 pb-6"><div><div class="flex gap-3 mb-2 items-center"><span id="dTicket" class="font-mono text-red-400 text-xs font-bold bg-red-900/20 px-2 py-1 rounded border border-red-900/30"></span><span id="dDate" class="font-mono text-slate-400 text-[10px]"></span></div><h2 id="dCat" class="text-2xl font-bold text-white mb-1"></h2><p class="text-sm text-slate-400">Terlapor: <span id="dSuspect" class="text-white font-bold bg-slate-700 px-2 rounded"></span></p></div><div id="dStatusBadge" class="px-4 py-1.5 rounded text-xs font-bold uppercase shadow-lg"></div></div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                                    <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-3">Kronologi (5W+1H)</h4>
+                                    <p id="dKron" class="text-slate-300 text-sm leading-relaxed whitespace-pre-line"></p>
+                                </div>
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                                    <h4 class="text-[10px] font-bold text-teal-600 uppercase mb-3">Bukti Awal & Lampiran</h4>
+                                    <p id="dBukti" class="text-teal-400 text-sm font-mono border-l-2 border-teal-800 pl-4 mb-4"></p>
+                                    <div id="dAttachment" class="hidden">
+                                        <a id="dAttachmentLink" href="#" target="_blank" class="flex items-center gap-3 bg-slate-800 p-3 rounded-lg border border-slate-600 hover:bg-slate-700 transition">
+                                            <div class="bg-slate-700 p-2 rounded text-white">📎</div>
+                                            <div>
+                                                <div class="text-xs text-slate-400">Lampiran File</div>
+                                                <div id="dAttachmentName" class="text-sm font-bold text-white truncate max-w-[150px]"></div>
+                                            </div>
+                                            <div class="text-xs text-teal-400 ml-auto">Buka ></div>
+                                        </a>
+                                        <!-- Preview Image -->
+                                        <img id="dAttachmentImg" class="mt-2 rounded border border-slate-600 w-full max-h-48 object-cover hidden">
                                     </div>
-                                    <h2 id="dCat" class="text-2xl md:text-3xl font-bold text-white mb-1 tracking-tight leading-tight"></h2>
-                                    <p class="text-xs md:text-sm text-slate-400 mt-1">Terlapor: <span id="dSuspect" class="text-white font-bold bg-slate-700 px-2 py-0.5 rounded"></span></p>
-                                </div>
-                                <div id="dStatusBadge" class="px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0"></div>
-                            </div>
-
-                            <!-- Core Data Grid -->
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
-                                <div class="bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-700">
-                                    <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-3 md:mb-4 tracking-wider">Kronologi Pelapor</h4>
-                                    <p id="dKron" class="text-slate-300 text-xs md:text-sm leading-relaxed whitespace-pre-line"></p>
-                                </div>
-                                <div class="bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-700">
-                                    <h4 class="text-[10px] font-bold text-teal-600 uppercase mb-3 md:mb-4 tracking-wider">Bukti Awal Tersedia</h4>
-                                    <p id="dBukti" class="text-teal-400 text-xs md:text-sm font-mono border-l-2 border-teal-800 pl-4"></p>
                                 </div>
                             </div>
-
-                            <div class="mb-6 md:mb-8">
-                                <div class="flex items-center gap-4 mb-4 md:mb-6">
-                                    <div class="h-px bg-slate-700 flex-grow"></div>
-                                    <span class="text-red-500 font-bold text-[10px] md:text-xs uppercase tracking-widest font-mono bg-slate-800 px-4 py-1 border border-red-900/50 rounded-full text-center">Protokol Investigasi Taktis</span>
-                                    <div class="h-px bg-slate-700 flex-grow"></div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
-                                    <div class="bg-slate-900 border border-blue-900/40 rounded-xl p-4 md:p-5"><h5 class="text-blue-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">📑 Dokumen Sitaan</h5><ul id="invDocs" class="list-disc ml-4 text-xs text-slate-400 space-y-1.5"></ul></div>
-                                    <div class="bg-slate-900 border border-orange-900/40 rounded-xl p-4 md:p-5"><h5 class="text-orange-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">🚩 Pola Fraud</h5><ul id="invFlags" class="list-disc ml-4 text-xs text-slate-400 space-y-1.5"></ul></div>
-                                    <div class="bg-slate-900 border border-purple-900/40 rounded-xl p-4 md:p-5"><h5 class="text-purple-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">💬 Pertanyaan Kunci</h5><ul id="invQ" class="space-y-2"></ul></div>
-                                </div>
-                            </div>
-
-                            <div class="bg-slate-900 p-4 md:p-6 rounded-xl border border-yellow-700/30 shadow-lg">
-                                <h4 class="text-yellow-500 font-bold text-xs uppercase mb-4">Keputusan Pengawas</h4>
-                                <div class="flex flex-col gap-4">
-                                    <div><label class="block text-[10px] text-slate-500 uppercase mb-1">Status</label><select id="dActionStatus" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500"><option value="Menunggu">Menunggu</option><option value="Investigasi">Investigasi</option><option value="Selesai">Selesai</option><option value="Ditolak">Ditolak</option></select></div>
-                                    <div><label class="block text-[10px] text-slate-500 uppercase mb-1">Respon Internal</label><input type="text" id="dActionResp" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500" placeholder="Pesan untuk pelapor..."></div>
-                                    <button onclick="saveCase()" class="bg-teal-700 hover:bg-teal-600 text-white px-6 py-3 rounded-lg font-bold text-sm transition shadow-lg w-full md:w-auto self-end">UPDATE KASUS</button>
-                                </div>
-                            </div>
+                            <div class="bg-slate-900 p-4 rounded-xl border border-yellow-700/30 shadow-lg"><h4 class="text-yellow-500 font-bold text-xs uppercase mb-4">Tindak Lanjut Cloud</h4><div class="flex flex-col gap-4"><div><label class="block text-[10px] text-slate-500 uppercase mb-1">Status</label><select id="dActionStatus" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500"><option value="Menunggu">Menunggu</option><option value="Investigasi">Investigasi</option><option value="Selesai">Selesai</option><option value="Ditolak">Ditolak</option></select></div><div><label class="block text-[10px] text-slate-500 uppercase mb-1">Respon</label><input type="text" id="dActionResp" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500" placeholder="Pesan..."></div><button onclick="saveCaseHandler()" class="bg-teal-700 hover:bg-teal-600 text-white px-6 py-3 rounded-lg font-bold text-sm transition shadow-lg w-full md:w-auto self-end">UPDATE KE CLOUD</button></div></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- ADMIN VIEW 2: MASTER SOP (Responsive) -->
                 <div id="admViewGuide" class="hidden flex-grow overflow-hidden fade-in bg-slate-900">
+                    <!-- ... (Existing Guide Code) ... -->
                     <div class="grid grid-cols-1 lg:grid-cols-12 h-full">
-                        <!-- Navigation -->
-                        <div class="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto custom-scroll p-4 md:p-6 h-1/3 lg:h-full" id="adminFlowContainer">
-                            <!-- JS Injected -->
-                        </div>
-                        <!-- Details -->
+                        <div class="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto custom-scroll p-4 md:p-6 h-1/3 lg:h-full" id="adminFlowContainer"></div>
                         <div class="lg:col-span-9 p-6 md:p-10 overflow-y-auto custom-scroll h-2/3 lg:h-full">
-                            <div id="adminGuideDetail" class="hidden max-w-4xl mx-auto">
-                                <div class="flex items-center gap-4 mb-6"><div id="adIcon" class="text-3xl md:text-4xl bg-slate-800 p-3 rounded-lg border border-slate-700"></div><div><span id="adStep" class="text-[10px] md:text-xs font-mono font-bold text-red-400 tracking-widest uppercase block mb-1"></span><h3 id="adTitle" class="text-2xl md:text-3xl font-bold text-white tracking-tight"></h3></div></div>
-                                <p id="adDesc" class="text-sm md:text-lg text-slate-400 mb-8 leading-relaxed border-b border-slate-800 pb-8"></p>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"><div class="bg-slate-800 p-5 md:p-6 rounded-xl border-l-4 border-blue-500"><h4 class="font-bold text-blue-400 text-xs uppercase mb-3 tracking-wider">🎯 Tujuan Audit</h4><p id="adGoal" class="text-xs md:text-sm text-slate-300"></p></div><div class="bg-slate-800 p-5 md:p-6 rounded-xl border-l-4 border-red-500"><h4 class="font-bold text-red-500 text-xs uppercase mb-3 tracking-wider">⚠️ Risiko Kegagalan</h4><p id="adRisk" class="text-xs md:text-sm text-slate-300"></p></div></div>
-                                <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden"><div class="bg-slate-800 px-6 py-3 border-b border-slate-700 flex justify-between"><h4 class="font-bold text-slate-400 text-xs uppercase">Checklist Eksekusi</h4><span class="text-[10px] text-slate-500 font-mono">CONFIDENTIAL PROTOCOL</span></div><ul id="adCheck" class="divide-y divide-slate-800"></ul></div>
-                            </div>
+                            <div id="adminGuideDetail" class="hidden max-w-4xl mx-auto"><div class="flex items-center gap-4 mb-6"><div id="adIcon" class="text-3xl bg-slate-800 p-3 rounded-lg border border-slate-700"></div><div><span id="adStep" class="text-xs font-mono font-bold text-red-400 tracking-widest uppercase block mb-1"></span><h3 id="adTitle" class="text-2xl font-bold text-white tracking-tight"></h3></div></div><p id="adDesc" class="text-sm md:text-lg text-slate-400 mb-8 leading-relaxed border-b border-slate-800 pb-8"></p><div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"><div class="bg-slate-800 p-5 rounded-xl border-l-4 border-blue-500"><h4 class="font-bold text-blue-400 text-xs uppercase mb-3">🎯 Tujuan</h4><p id="adGoal" class="text-sm text-slate-300"></p></div><div class="bg-slate-800 p-5 rounded-xl border-l-4 border-red-500"><h4 class="font-bold text-red-500 text-xs uppercase mb-3">⚠️ Risiko</h4><p id="adRisk" class="text-sm text-slate-300"></p></div></div><div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden"><div class="bg-slate-800 px-6 py-3 border-b border-slate-700 flex justify-between"><h4 class="font-bold text-slate-400 text-xs uppercase">Checklist</h4><span class="text-[10px] text-slate-500 font-mono">CONFIDENTIAL</span></div><ul id="adCheck" class="divide-y divide-slate-800"></ul></div></div>
                             <div id="adminGuideEmpty" class="h-full flex flex-col items-center justify-center text-slate-600 opacity-40"><div class="text-6xl mb-4">📖</div><p class="font-mono text-sm uppercase">Pilih Tahapan Audit</p></div>
                         </div>
                     </div>
@@ -342,236 +337,161 @@
             </div>
         </div>
 
-        <!-- Success Modal -->
         <div id="modalSuccess" class="fixed inset-0 bg-black/90 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
-            <div class="bg-white rounded-2xl p-6 md:p-8 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-all">
-                <div class="text-5xl md:text-6xl mb-4 md:mb-6">🔒</div>
-                <h3 class="text-lg md:text-xl font-bold text-slate-900 mb-2">Laporan Diamankan</h3>
-                <p class="text-slate-500 text-xs md:text-sm leading-relaxed mb-6">Sistem mengenkripsi data. Simpan <b>Tiket ID</b> ini sebagai kunci akses status Anda.</p>
-                <div id="ticketDisplay" class="bg-slate-100 border-2 border-slate-300 p-3 md:p-4 font-mono font-bold text-xl md:text-2xl text-slate-800 rounded-xl select-all mb-6 tracking-widest break-all"></div>
-                <button onclick="location.reload()" class="w-full bg-slate-900 text-white py-3 md:py-4 rounded-xl font-bold hover:bg-slate-800 transition text-sm">SAYA SUDAH SIMPAN</button>
+            <div class="bg-white rounded-2xl p-6 md:p-8 max-w-sm w-full text-center shadow-2xl">
+                <div class="text-5xl mb-4">☁️</div><h3 class="text-lg font-bold text-slate-900">Terkirim ke Cloud</h3><p class="text-slate-500 text-sm mb-6">Data aman di server. Simpan Tiket ID ini.</p>
+                <div id="ticketDisplay" class="bg-slate-100 border-2 border-slate-300 p-3 font-mono font-bold text-xl text-slate-800 rounded-xl select-all mb-6"></div>
+                <button onclick="location.reload()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">TUTUP</button>
             </div>
         </div>
     </main>
 
     <script>
-        // --- 1. DATA: SOP PELAPOR (Sama seperti v3.1) ---
+        // --- DATA & UI LOGIC ---
         const sopSteps = [
-            { 
-                id: 1, title: "Validasi & Niat", 
-                desc: "Pastikan laporan Anda memiliki dasar hukum, bukan hanya emosi. Apakah ini pelanggaran aturan tertulis?", 
-                strat: "Gunakan 'Matriks Kelayakan': 1. Apakah ada aturan tertulis yang dilanggar? 2. Apakah ada kerugian materiil/immateriil? 3. Apakah ini kejadian berulang?", 
-                dos: ["Cek aturan perusahaan/PKB.", "Hitung estimasi kerugian kasar.", "Fokus pada fakta, bukan orangnya."], 
-                donts: ["Melapor hanya karena tidak suka pribadi (Dislike).", "Melapor berdasarkan rumor/gosip kantin.", "Menebak-nebak tanpa data dasar."] 
-            },
-            { 
-                id: 2, title: "Isolasi Digital", 
-                desc: "Lindungi jejak digital Anda. Anggap semua perangkat kantor dipantau oleh admin IT (Keylogger/Screen Monitoring).", 
-                strat: "Prinsip 'Air Gap': Pisahkan aktivitas pelaporan dari jaringan kantor secara fisik.", 
-                dos: ["Gunakan HP/Laptop pribadi.", "Gunakan Paket Data Seluler sendiri (Matikan WiFi).", "Gunakan Browser Mode Incognito/Private."], 
-                donts: ["Menggunakan WiFi Kantor (Terlacak MAC Address).", "Login email pelapor di PC Kantor.", "Mengirim bukti ke email korporat."] 
-            },
-            { 
-                id: 3, title: "Dokumentasi Senyap", 
-                desc: "Kumpulkan bukti statis tanpa memicu kecurigaan. Jadilah 'Hantu' di sistem.", 
-                strat: "Bukti terbaik adalah yang tidak bisa disangkal (Dokumen, Log, Foto). Hindari bukti lisan yang bisa berubah.", 
-                dos: ["Foto layar komputer/dokumen fisik saat sepi.", "Screenshot chat/email mencurigakan.", "Simpan di Cloud Pribadi (Google Drive personal)."], 
-                donts: ["Membawa pulang dokumen asli (Itu Pencurian!).", "Mencolokkan Flashdisk pribadi ke PC Kantor (Terdeteksi USB Log).", "Merekam percakapan tanpa izin (Melanggar UU ITE)."] 
-            },
-            { 
-                id: 4, title: "Kronologi Taktis", 
-                desc: "Susun cerita yang memudahkan investigator bekerja. Fokus pada 5W+1H.", 
-                strat: "Urutkan kejadian berdasarkan waktu (Timeline). Ini memudahkan pencocokan dengan log CCTV atau Absensi.", 
-                dos: ["Tulis spesifik: Siapa, Kapan (Jam/Tgl), Dimana.", "Sebutkan nominal angka jika tahu.", "Gunakan bahasa netral & objektif."], 
-                donts: ["Menggunakan kata sifat emosional ('Dia jahat', 'Dia serakah').", "Mencampuradukkan fakta dengan opini pribadi.", "Menulis terlalu panjang dan berputar-putar."] 
-            },
-            { 
-                id: 5, title: "Eksekusi Lapor", 
-                desc: "Kirim data melalui aplikasi WBS ini. Sistem menggunakan enkripsi satu arah.", 
-                strat: "Lakukan di luar jam kerja atau saat jam istirahat di lokasi sepi.", 
-                dos: ["Isi semua kolom wajib.", "Simpan Tiket ID di Catatan HP yang dikunci password.", "Langsung tutup tab browser setelah selesai."], 
-                donts: ["Share Tiket ID ke rekan kerja/keluarga.", "Melapor hal yang sama berulang-ulang (Spamming).", "Screenshot bukti lapor dan menyimpannya di Galeri umum."] 
-            },
-            { 
-                id: 6, title: "Mode Kamuflase", 
-                desc: "Kunci keberhasilan adalah perilaku Anda pasca-lapor. Jangan berubah!", 
-                strat: "Teknik 'Business as Usual': Jika Anda biasa pendiam, tetap diam. Jika biasa vokal, tetap vokal.", 
-                dos: ["Bekerja seperti biasa secara profesional.", "Tetap ramah pada terlapor jika berpapasan.", "Pura-pura kaget jika isu ini mencuat nanti."], 
-                donts: ["Tiba-tiba menghindar/gugup saat bertemu terlapor.", "Berbisik-bisik mencurigakan dengan rekan lain.", "Menyindir terlapor di status media sosial."] 
-            },
-            { 
-                id: 7, 
-                title: "Monitoring Aman", 
-                desc: "Pantau status laporan hanya melalui jalur aman.", 
-                strat: "Komunikasi hanya via fitur 'Cek Status' di aplikasi ini. Kami tidak akan menghubungi via WA/Telp.", 
-                dos: ["Cek status seminggu sekali di rumah.", "Jawab respon admin jika diminta bukti tambahan.", "Percayakan proses pada tim independen."], 
-                donts: ["Bertanya progres ke Pengurus/HRD secara langsung.", "Membuka identitas diri ('Saya yang lapor lho').", "Kecewa/marah terbuka jika proses terasa lambat."] 
-            }
+            { id: 1, title: "Validasi & Niat", desc: "Pastikan laporan Anda memiliki dasar hukum, bukan hanya emosi. Apakah ini pelanggaran aturan tertulis?", strat: "Gunakan 'Matriks Kelayakan': 1. Apakah ada aturan tertulis yang dilanggar? 2. Apakah ada kerugian materiil/immateriil? 3. Apakah ini kejadian berulang?", dos: ["Cek aturan perusahaan/PKB.", "Hitung estimasi kerugian kasar.", "Fokus pada fakta, bukan orangnya."], donts: ["Melapor hanya karena tidak suka pribadi (Dislike).", "Melapor berdasarkan rumor/gosip kantin.", "Menebak-nebak tanpa data dasar."] },
+            { id: 2, title: "Isolasi Digital", desc: "Lindungi jejak digital Anda. Anggap semua perangkat kantor dipantau oleh admin IT.", strat: "Prinsip 'Air Gap': Pisahkan aktivitas pelaporan dari jaringan kantor secara fisik.", dos: ["Gunakan HP/Laptop pribadi.", "Gunakan Paket Data Seluler sendiri.", "Gunakan Browser Mode Incognito."], donts: ["Menggunakan WiFi Kantor.", "Login email pelapor di PC Kantor.", "Mengirim bukti ke email korporat."] },
+            { id: 3, title: "Dokumentasi Senyap", desc: "Kumpulkan bukti statis tanpa memicu kecurigaan. Jadilah 'Hantu' di sistem.", strat: "Bukti terbaik adalah yang tidak bisa disangkal (Dokumen, Log, Foto). Hindari bukti lisan.", dos: ["Foto layar komputer saat sepi.", "Screenshot chat/email mencurigakan.", "Simpan di Cloud Pribadi."], donts: ["Membawa pulang dokumen asli (Pencurian!).", "Mencolokkan Flashdisk pribadi ke PC Kantor.", "Merekam percakapan tanpa izin."] },
+            { id: 4, title: "Kronologi Taktis", desc: "Susun cerita yang memudahkan investigator bekerja. Fokus pada 5W+1H.", strat: "Urutkan kejadian berdasarkan waktu (Timeline). Ini memudahkan pencocokan log.", dos: ["Tulis spesifik: Siapa, Kapan, Dimana.", "Sebutkan nominal angka jika tahu.", "Gunakan bahasa netral."], donts: ["Menggunakan kata sifat emosional.", "Mencampuradukkan fakta dengan opini.", "Menulis terlalu panjang."] },
+            { id: 5, title: "Eksekusi Lapor", desc: "Kirim data melalui aplikasi WBS ini. Sistem menggunakan enkripsi satu arah.", strat: "Lakukan di luar jam kerja atau saat jam istirahat di lokasi sepi.", dos: ["Isi semua kolom wajib.", "Simpan Tiket ID di Catatan HP.", "Langsung tutup tab browser."], donts: ["Share Tiket ID ke rekan kerja.", "Melapor hal yang sama berulang-ulang.", "Screenshot bukti lapor di Galeri umum."] },
+            { id: 6, title: "Mode Kamuflase", desc: "Kunci keberhasilan adalah perilaku Anda pasca-lapor. Jangan berubah!", strat: "Teknik 'Business as Usual': Jika biasa pendiam, tetap diam.", dos: ["Bekerja seperti biasa.", "Tetap ramah pada terlapor.", "Pura-pura kaget jika isu mencuat."], donts: ["Tiba-tiba menghindar.", "Berbisik-bisik mencurigakan.", "Menyindir terlapor di medsos."] },
+            { id: 7, title: "Monitoring Aman", desc: "Pantau status laporan hanya melalui jalur aman.", strat: "Komunikasi hanya via fitur 'Cek Status' di aplikasi ini.", dos: ["Cek status seminggu sekali.", "Jawab respon admin di sistem.", "Percayakan proses pada tim."], donts: ["Bertanya progres ke Pengurus.", "Membuka identitas diri.", "Kecewa terbuka."] }
         ];
-
-        // --- 2. LEGAL DATABASE (VERBATIM TEXT) ---
         const protocols = {
-            "Korupsi": {
-                legal: { title: "Korupsi / Suap / Gratifikasi", pasal_code: "Pasal 2 ayat (1) & Pasal 3 UU 31/1999 jo. UU 20/2001", pasal_desc: "\"Setiap orang yang secara melawan hukum melakukan perbuatan memperkaya diri sendiri atau orang lain atau suatu korporasi yang dapat merugikan keuangan negara atau perekonomian negara...\" (Pasal 2). \"Setiap orang yang dengan tujuan menguntungkan diri sendiri... menyalahgunakan kewenangan...\" (Pasal 3).", prison: "4 - 20 Tahun Penjara", fine: "Rp 200 Juta - Rp 1 Miliar" },
-                investigation: { docs: ["Dokumen Vendor Asli", "Rekening Koran Koperasi", "Bukti Transfer / Chat"], flags: ["Vendor tanpa tender", "Mark-up harga abnormal", "Kickback ke pengurus"], questions: ["Siapa merekomendasikan vendor ini?", "Kenapa harga jauh diatas pasar?", "Ada hubungan keluarga dengan vendor?"] }
-            },
-            "Penggelapan": {
-                legal: { title: "Penggelapan Dalam Jabatan", pasal_code: "KUHP Pasal 372 & 374", pasal_desc: "\"Barang siapa dengan sengaja dan melawan hukum memiliki barang sesuatu yang seluruhnya atau sebagian adalah kepunyaan orang lain, tetapi yang ada dalam kekuasaannya bukan karena kejahatan...\" (Pasal 372). Diperberat jika dilakukan oleh orang yang memegang barang itu karena jabatannya (Pasal 374).", prison: "Maksimal 4 - 5 Tahun", fine: "Denda + Ganti Rugi Penuh" },
-                investigation: { docs: ["Berita Acara Stock Opname", "Log Gudang / Kas", "CCTV Area Brankas"], flags: ["Selisih kas/stok berulang", "Barang keluar tanpa surat", "Gaya hidup mewah tiba-tiba"], questions: ["Jelaskan selisih ini?", "Siapa pemegang kunci selain Anda?", "Dimana fisik uang/barang sekarang?"] }
-            },
-            "Pemalsuan": {
-                legal: { title: "Pemalsuan Dokumen / Laporan", pasal_code: "KUHP Pasal 263 Ayat (1)", pasal_desc: "\"Barangsiapa dengan sengaja dan melawan hukum memalsukan surat-surat yang dapat menimbulkan kerugian bagi orang lain atau barangsiapa menyerahkan surat-surat yang dipalsukan itu seolah-olah asli...\"", prison: "Maksimal 6 Tahun", fine: "Sanksi Pidana" },
-                investigation: { docs: ["Dokumen Asli (Bukan Copy)", "Log Audit Sistem", "Spesimen Tanda Tangan"], flags: ["Nomor faktur ganda", "Tanda tangan scan/crop", "Tanggal mundur (backdate)"], questions: ["Siapa yang mengetik dokumen?", "Kenapa tanggal mundur?", "Tunjukkan file asli di komputer Anda."] }
-            },
-            "Pencurian": {
-                legal: { title: "Pencurian Fisik / Kas", pasal_code: "KUHP Pasal 362", pasal_desc: "\"Barangsiapa mengambil barang sesuatu, yang seluruhnya atau sebagian kepunyaan orang lain, dengan maksud untuk dimiliki secara melawan hukum...\" (Pencurian Biasa).", prison: "Maksimal 5 Tahun", fine: "Audit Restitusi (Ganti Rugi)" },
-                investigation: { docs: ["Rekaman CCTV", "Log Akses Pintu", "Buku Tamu"], flags: ["CCTV mati saat kejadian", "Pintu rusak paksa", "Akses di luar jam kerja"], questions: ["Posisi Anda jam sekian?", "Kenapa ada di kantor malam itu?", "Siapa saksi Anda?"] }
-            },
-            "SOP": {
-                legal: { title: "Pelanggaran Berat SOP & Etika", pasal_code: "UU 17/2012 (Pasal 64) & KUHP 372 (Jika Fraud)", pasal_desc: "\"Pengurus dapat diberhentikan berdasarkan keputusan Rapat Anggota...\" (Sanksi Internal). Jika unsur fraud terpenuhi, dikenakan pasal Penggelapan.", prison: "4 Tahun (Jika Fraud)", fine: "Pemecatan (PHK) + Pidana" },
-                investigation: { docs: ["Data Absensi", "Kontrak Kerja (PKB)", "Saksi Rekan Kerja"], flags: ["Konflik kepentingan", "Nepotisme", "Mangkir kerja"], questions: ["Sadar aturan ini?", "Kenapa tidak lapor atasan?", "Alasan tindakan tersebut?"] }
-            }
+            "Korupsi": { legal: { title: "Korupsi / Suap / Gratifikasi", pasal_code: "Pasal 2 ayat (1) & Pasal 3 UU 31/1999 jo. UU 20/2001", pasal_desc: "\"Setiap orang yang secara melawan hukum melakukan perbuatan memperkaya diri sendiri atau orang lain atau suatu korporasi...\" (Pasal 2). \"Setiap orang yang dengan tujuan menguntungkan diri sendiri... menyalahgunakan kewenangan...\" (Pasal 3).", prison: "4 - 20 Tahun Penjara", fine: "Rp 200 Juta - Rp 1 Miliar" } },
+            "Penggelapan": { legal: { title: "Penggelapan Dalam Jabatan", pasal_code: "KUHP Pasal 372 & 374", pasal_desc: "\"Barang siapa dengan sengaja dan melawan hukum memiliki barang sesuatu yang seluruhnya atau sebagian adalah kepunyaan orang lain...\" (Pasal 372). Diperberat jika dilakukan oleh orang yang memegang barang itu karena jabatannya (Pasal 374).", prison: "Maksimal 5 Tahun", fine: "Denda + Ganti Rugi Penuh" } },
+            "Pemalsuan": { legal: { title: "Pemalsuan Dokumen / Laporan", pasal_code: "KUHP Pasal 263 Ayat (1)", pasal_desc: "\"Barangsiapa dengan sengaja dan melawan hukum memalsukan surat-surat yang dapat menimbulkan kerugian bagi orang lain atau barangsiapa menyerahkan surat-surat yang dipalsukan itu seolah-olah asli...\"", prison: "Maksimal 6 Tahun", fine: "Sanksi Pidana" } },
+            "Pencurian": { legal: { title: "Pencurian Fisik / Kas", pasal_code: "KUHP Pasal 362", pasal_desc: "\"Barangsiapa mengambil barang sesuatu, yang seluruhnya atau sebagian kepunyaan orang lain, dengan maksud untuk dimiliki secara melawan hukum...\" (Pencurian Biasa).", prison: "Maksimal 5 Tahun", fine: "Audit Restitusi (Ganti Rugi)" } },
+            "SOP": { legal: { title: "Pelanggaran Berat SOP & Etika", pasal_code: "UU 17/2012 (Pasal 64) & KUHP 372 (Jika Fraud)", pasal_desc: "\"Pengurus dapat diberhentikan berdasarkan keputusan Rapat Anggota...\" (Sanksi Internal). Jika unsur fraud terpenuhi, dikenakan pasal Penggelapan.", prison: "4 Tahun (Jika Fraud)", fine: "Pemecatan (PHK) + Pidana" } }
         };
-
-        // --- 3. SOP ADMIN ---
         const adminSteps = [
-            { id: 1, title: "Telaah Awal", icon: "🔍", desc: "Analisis laporan untuk memisahkan 'noise' dari 'signal'.", goal: "Validasi layak investigasi.", risk: "Investigasi Prematur: Pelaku kabur.", check: ["Cek 5W+1H.", "Cek wewenang terlapor.", "Hitung estimasi kerugian."] },
-            { id: 2, title: "Bentuk Tim", icon: "👥", desc: "Tim steril dari konflik kepentingan.", goal: "Objektifitas & Kerahasiaan.", risk: "Kebocoran Internal.", check: ["Cek relasi tim-terlapor.", "Wajib NDA.", "Cover Story Audit."] },
-            { id: 3, title: "Forensik Data", icon: "💾", desc: "Amankan bukti digital/fisik SEBELUM interaksi.", goal: "Chain of Custody.", risk: "Penghancuran Bukti.", check: ["Image Copy Harddisk.", "Tarik Log CCTV/Akses.", "Amankan Dokumen Asli."] },
-            { id: 4, title: "Observasi", icon: "👀", desc: "Validasi data forensik di lapangan.", goal: "Konfirmasi anomali.", risk: "Eksposur Dini.", check: ["Stock Opname dadakan.", "Cek fisik aset.", "Amati gaya hidup."] },
-            { id: 5, title: "Interogasi", icon: "🗣️", desc: "Konfrontasi setelah bukti lengkap.", goal: "Pengakuan (Confession).", risk: "Debat Kusir.", check: ["Ruangan netral.", "Teknik Open Questions.", "Tunjukkan bukti bertahap."] },
-            { id: 6, title: "Laporan (LHA)", icon: "📝", desc: "Susun Laporan Hasil Audit.", goal: "Rekomendasi Sanksi.", risk: "Bias Kesimpulan.", check: ["Kronologi Fakta.", "Hitung Kerugian.", "Rekomendasi Sanksi."] }
+            { id: 1, title: "Telaah Awal", icon: "🔍", desc: "Analisis laporan untuk memisahkan 'noise' dari 'signal'.", goal: "Validasi layak investigasi.", risk: "Investigasi Prematur.", check: ["Cek 5W+1H.", "Cek wewenang terlapor.", "Hitung kerugian."] },
+            { id: 2, title: "Bentuk Tim", icon: "👥", desc: "Tim steril dari konflik kepentingan.", goal: "Objektifitas.", risk: "Kebocoran Internal.", check: ["Cek relasi.", "Wajib NDA.", "Cover Story."] },
+            { id: 3, title: "Forensik Data", icon: "💾", desc: "Amankan bukti digital/fisik SEBELUM interaksi.", goal: "Chain of Custody.", risk: "Penghancuran Bukti.", check: ["Image Copy HDD.", "Log CCTV.", "Amankan Dokumen."] },
+            { id: 4, title: "Observasi", icon: "👀", desc: "Validasi data forensik di lapangan.", goal: "Konfirmasi anomali.", risk: "Eksposur Dini.", check: ["Stock Opname.", "Cek fisik.", "Gaya hidup."] },
+            { id: 5, title: "Interogasi", icon: "🗣️", desc: "Konfrontasi setelah bukti lengkap.", goal: "Pengakuan.", risk: "Debat Kusir.", check: ["Ruangan netral.", "Open Questions.", "Bukti bertahap."] },
+            { id: 6, title: "Laporan (LHA)", icon: "📝", desc: "Susun Laporan Hasil Audit.", goal: "Rekomendasi Sanksi.", risk: "Bias Kesimpulan.", check: ["Kronologi.", "Hitung Kerugian.", "Rekomendasi."] }
         ];
 
-        // --- CORE FUNCTIONS ---
-        const DB_KEY = 'siat_adaro_mobile_v1';
-        function getDB() { return JSON.parse(localStorage.getItem(DB_KEY)) || []; }
-        function saveDB(data) { localStorage.setItem(DB_KEY, JSON.stringify(data)); }
+        // --- UI FUNCTIONS ---
+        function updateLegalInfo() { const c = document.getElementById('inKategori').value; const p = protocols[c]; if(p) { document.getElementById('legalEmpty').classList.add('hidden'); document.getElementById('legalContent').classList.remove('hidden'); document.getElementById('lPasalTitle').innerText = p.legal.title; document.getElementById('lPasalDesc').innerText = p.legal.pasal_desc; document.getElementById('lPrison').innerText = p.legal.prison; document.getElementById('lFine').innerText = p.legal.fine; } }
+        function loadGuideDetail(id) { const s = sopSteps.find(x => x.id === id); document.getElementById('guideEmpty').classList.add('hidden'); document.getElementById('guideDetail').classList.remove('hidden'); document.getElementById('gStep').innerText = `LANGKAH ${s.id}`; document.getElementById('gTitle').innerText = s.title; document.getElementById('gDesc').innerText = s.desc; document.getElementById('gStrat').innerText = s.strat; document.getElementById('gDos').innerHTML = s.dos.map(i=>`<li>${i}</li>`).join(''); document.getElementById('gDonts').innerHTML = s.donts.map(i=>`<li>${i}</li>`).join(''); if(window.innerWidth < 1024) document.getElementById('guideDetailCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        function loadAdminGuideDetail(id) { const s = adminSteps.find(x => x.id === id); document.getElementById('adminGuideEmpty').classList.add('hidden'); document.getElementById('adminGuideDetail').classList.remove('hidden'); document.getElementById('adStep').innerText = `TAHAP ${s.id}`; document.getElementById('adTitle').innerText = s.title; document.getElementById('adDesc').innerText = s.desc; document.getElementById('adIcon').innerText = s.icon; document.getElementById('adGoal').innerText = s.goal; document.getElementById('adRisk').innerText = s.risk; document.getElementById('adCheck').innerHTML = s.check.map(c => `<li class="px-6 py-4 flex items-start gap-3 text-sm text-slate-300 border-b border-slate-800 last:border-0"><span class="text-teal-500 mt-0.5">✔</span>${c}</li>`).join(''); }
 
-        // --- PUBLIC: SOP ---
-        const flowCont = document.getElementById('flowContainer');
-        sopSteps.forEach((s, i) => {
-            const isLast = i === sopSteps.length - 1;
-            const div = document.createElement('div');
-            // Responsive List Item: Horizontal on mobile (if needed, but vertical stack is safer for text length)
-            div.className = `relative pl-12 md:pl-14 pb-6 md:pb-8 cursor-pointer group ${isLast?'last-step':''}`;
-            div.onclick = () => {
-                loadGuideDetail(s.id);
-                // Mobile Auto-Scroll logic
-                if (window.innerWidth < 1024) {
-                    document.getElementById('guideDetailCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+        // --- SUBMIT HANDLER ---
+        async function submitReportHandler(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitForm');
+            btn.innerHTML = "MENGIRIM..."; btn.disabled = true;
+
+            const token = '#WBS-' + Math.floor(10000 + Math.random() * 90000);
+            const reportData = {
+                token: token,
+                kategori: document.getElementById('inKategori').value,
+                terlapor: document.getElementById('inTerlapor').value,
+                waktu: document.getElementById('inWaktu').value,
+                kronologi: document.getElementById('inKronologi').value,
+                bukti: document.getElementById('inBukti').value,
+                status: 'Menunggu',
+                adminResponse: '',
+                timestamp: new Date().toLocaleDateString('id-ID'),
+                createdAt: Date.now()
             };
-            div.innerHTML = `<div class="step-line"></div><div class="absolute left-0 top-1 w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-slate-300 bg-white text-slate-400 font-bold flex items-center justify-center text-sm md:text-lg transition-all group-hover:border-teal-500 group-hover:bg-teal-50 group-hover:text-teal-700 z-10" id="step-${s.id}">${s.id}</div><h4 class="font-bold text-slate-600 pt-2 md:pt-3 text-xs md:text-sm uppercase tracking-wide group-hover:text-teal-700 transition">${s.title}</h4>`;
-            flowCont.appendChild(div);
-        });
 
-        function loadGuideDetail(id) {
-            const s = sopSteps.find(x => x.id === id);
-            document.getElementById('guideEmpty').classList.add('hidden'); document.getElementById('guideDetail').classList.remove('hidden');
-            document.getElementById('gStep').innerText = `LANGKAH ${s.id}`; document.getElementById('gTitle').innerText = s.title; document.getElementById('gDesc').innerText = s.desc; document.getElementById('gStrat').innerText = s.strat;
-            document.getElementById('gDos').innerHTML = s.dos.map(i=>`<li>${i}</li>`).join(''); document.getElementById('gDonts').innerHTML = s.donts.map(i=>`<li>${i}</li>`).join('');
-            document.querySelectorAll('[id^="step-"]').forEach(el => { el.classList.remove('bg-teal-600', 'text-white', 'border-teal-600'); el.classList.add('bg-white', 'text-slate-400', 'border-slate-300'); });
-            const active = document.getElementById(`step-${id}`); active.classList.remove('bg-white', 'text-slate-400', 'border-slate-300'); active.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
-        }
+            const fileInput = document.getElementById('inFile');
+            const file = fileInput.files.length > 0 ? fileInput.files[0] : null;
 
-        // --- PUBLIC: REPORT & LEGAL ---
-        function updateLegalInfo() {
-            const c = document.getElementById('inKategori').value;
-            const p = protocols[c];
-            if(p) {
-                document.getElementById('legalEmpty').classList.add('hidden'); document.getElementById('legalContent').classList.remove('hidden');
-                document.getElementById('lPasalTitle').innerText = p.legal.title; document.getElementById('lPasalDesc').innerText = `${p.legal.pasal_code}: "${p.legal.pasal_desc}"`;
-                document.getElementById('lPrison').innerText = p.legal.prison; document.getElementById('lFine').innerText = p.legal.fine;
-            }
-        }
-        function submitReport(e) {
-            e.preventDefault(); const r = getDB(); const t = '#WBS-' + Math.floor(10000 + Math.random() * 90000);
-            r.push({ id: Date.now(), token: t, kategori: document.getElementById('inKategori').value, terlapor: document.getElementById('inTerlapor').value, kronologi: document.getElementById('inKronologi').value, bukti: document.getElementById('inBukti').value, status: 'Menunggu', adminResponse: '', timestamp: new Date().toLocaleDateString('id-ID') });
-            saveDB(r); document.getElementById('ticketDisplay').innerText = t; document.getElementById('modalSuccess').classList.remove('hidden');
-        }
-        function checkStatus() {
-            const t = document.getElementById('trackInput').value.trim(); const r = getDB().find(x => x.token === t); const res = document.getElementById('trackResult');
-            if(r) { res.classList.remove('hidden'); document.getElementById('tBadge').innerText = r.status; document.getElementById('tMsg').innerText = r.status==='Investigasi'?'Investigasi Berjalan':'Laporan diterima.'; document.getElementById('tResp').innerText = r.adminResponse || "-"; document.getElementById('tBadge').className=`px-3 py-1 rounded-full text-xs font-bold ${r.status==='Investigasi'?'bg-orange-100 text-orange-700':'bg-slate-100 text-slate-700'}`; }
-            else { alert("Tiket salah."); res.classList.add('hidden'); }
-        }
-
-        // --- ADMIN ---
-        const adminFlow = document.getElementById('adminFlowContainer');
-        adminSteps.forEach((s, i) => {
-            const isLast = i === adminSteps.length - 1;
-            const div = document.createElement('div');
-            div.className = `relative pl-12 pb-8 cursor-pointer group ${isLast?'last-step':''}`;
-            div.onclick = () => loadAdminGuideDetail(s.id);
-            div.innerHTML = `<div class="admin-step-line"></div><div class="absolute left-0 top-1 w-10 h-10 rounded-full border-2 border-slate-600 bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-sm transition-all group-hover:border-red-500 group-hover:text-red-400 z-10" id="adstep-${s.id}">${s.id}</div><h4 class="font-bold text-slate-500 pt-2 text-xs uppercase tracking-wide group-hover:text-red-400 transition">${s.title}</h4>`;
-            adminFlow.appendChild(div);
-        });
-        function loadAdminGuideDetail(id) {
-            const s = adminSteps.find(x => x.id === id);
-            document.getElementById('adminGuideEmpty').classList.add('hidden'); document.getElementById('adminGuideDetail').classList.remove('hidden');
-            document.getElementById('adStep').innerText = `TAHAP AUDIT ${s.id}`; document.getElementById('adTitle').innerText = s.title; document.getElementById('adDesc').innerText = s.desc;
-            document.getElementById('adIcon').innerText = s.icon; document.getElementById('adGoal').innerText = s.goal; document.getElementById('adRisk').innerText = s.risk;
-            document.getElementById('adCheck').innerHTML = s.check.map(c => `<li class="px-4 md:px-6 py-3 md:py-4 flex items-start gap-3 text-xs md:text-sm text-slate-300 border-b border-slate-800 last:border-0"><span class="text-teal-500 mt-0.5">✔</span>${c}</li>`).join('');
-            document.querySelectorAll('[id^="adstep-"]').forEach(el => { el.classList.remove('border-red-500', 'text-red-400'); el.classList.add('border-slate-600', 'text-slate-400'); });
-            const active = document.getElementById(`adstep-${id}`); active.classList.remove('border-slate-600', 'text-slate-400'); active.classList.add('border-red-500', 'text-red-400');
-        }
-
-        function switchAdminTab(tab) {
-            const w = document.getElementById('admViewWorkspace'); const g = document.getElementById('admViewGuide');
-            const bW = document.getElementById('btnAdmWork'); const bG = document.getElementById('btnAdmGuide');
-            if(tab === 'workspace') {
-                w.classList.remove('hidden'); g.classList.add('hidden');
-                bW.classList.replace('text-slate-500', 'text-red-300'); bW.classList.add('bg-red-900/30', 'border', 'border-red-900/50');
-                bG.classList.replace('text-red-300', 'text-slate-500'); bG.classList.remove('bg-red-900/30', 'border', 'border-red-900/50');
-            } else {
-                w.classList.add('hidden'); g.classList.remove('hidden');
-                bG.classList.replace('text-slate-500', 'text-red-300'); bG.classList.add('bg-red-900/30', 'border', 'border-red-900/50');
-                bW.classList.replace('text-red-300', 'text-slate-500'); bW.classList.remove('bg-red-900/30', 'border', 'border-red-900/50');
-                loadAdminGuideDetail(1);
-            }
-        }
-
-        // Standard Functions & Navigation
-        function switchRole(r) { const p=document.getElementById('publicZone'); const s=document.getElementById('secureZone'); const nav=document.getElementById('mainNav'); const bP=document.getElementById('btnPublic'); const bA=document.getElementById('btnAdmin'); if(r==='public'){ p.classList.remove('-translate-x-full'); s.classList.add('translate-x-full'); nav.classList.replace('bg-slate-900','bg-white'); nav.classList.replace('border-slate-800','border-slate-200'); bP.classList.add('bg-white','shadow-sm','text-teal-700','ring-1'); bP.classList.remove('text-slate-500'); bA.classList.remove('bg-slate-800','text-white'); bA.classList.add('text-slate-500'); document.getElementById('appTitle').className="font-bold text-sm md:text-lg tracking-tight text-slate-800 block uppercase truncate"; document.getElementById('zoneLabel').className="text-[9px] md:text-[11px] font-bold uppercase tracking-widest text-teal-600 block truncate"; } else { p.classList.add('-translate-x-full'); s.classList.remove('translate-x-full'); nav.classList.replace('bg-white','bg-slate-900'); nav.classList.replace('border-slate-200','border-slate-800'); bA.classList.add('bg-slate-800','text-white'); bA.classList.remove('text-slate-500'); bP.classList.remove('bg-white','shadow-sm','text-teal-700','ring-1'); bP.classList.add('text-slate-500'); document.getElementById('appTitle').className="font-bold text-sm md:text-lg tracking-tight text-white block uppercase truncate"; document.getElementById('zoneLabel').className="text-[9px] md:text-[11px] font-bold uppercase tracking-widest text-slate-500 block truncate"; } }
-        function setPublicTab(t) { ['guide','report','track'].forEach(x=>{ document.getElementById(`content-${x}`).classList.add('hidden'); document.getElementById(`tab-${x}`).classList.replace('border-teal-600','border-transparent'); document.getElementById(`tab-${x}`).classList.replace('text-teal-700','text-slate-500'); }); document.getElementById(`content-${t}`).classList.remove('hidden'); document.getElementById(`tab-${t}`).classList.replace('border-transparent','border-teal-600'); document.getElementById(`tab-${t}`).classList.replace('text-slate-500','text-teal-700'); }
-        function authAdmin() { if(document.getElementById('adminPass').value==='audit2024'){ document.getElementById('adminLogin').classList.add('hidden'); document.getElementById('adminDash').classList.remove('hidden'); loadReports(); switchAdminTab('workspace'); } else document.getElementById('loginErr').classList.remove('hidden'); }
-        function logoutAdmin() { location.reload(); }
-        
-        function loadReports() { 
-            const l=document.getElementById('reportList'); l.innerHTML=''; const db = getDB().reverse();
-            if(db.length === 0) document.getElementById('emptyAdmin').classList.remove('hidden');
-            db.forEach(r=>{ 
-                const d=document.createElement('div'); 
-                d.className="p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800"; 
-                d.onclick=()=>openCase(r.id); 
-                d.innerHTML=`<div class="flex justify-between mb-1"><span class="text-[10px] font-mono text-slate-500">${r.token}</span><span class="text-[10px] font-bold ${r.status==='Menunggu'?'text-yellow-500':'text-teal-500'}">${r.status}</span></div><div class="text-sm text-white font-bold truncate">${r.kategori}</div>`; 
-                l.appendChild(d); 
-            }); 
-        }
-        
-        let currentCaseId=null;
-        function openCase(id) { 
-            currentCaseId=id; const r=getDB().find(x=>x.id===id); const p=protocols[r.kategori]; 
+            const success = await window.sendReportToCloud(reportData, file);
             
-            // Mobile Logic: Toggle Views
+            if (success) {
+                document.getElementById('ticketDisplay').innerText = token;
+                document.getElementById('modalSuccess').classList.remove('hidden');
+                document.forms[0].reset();
+                document.getElementById('fileName').classList.add('hidden');
+            }
+            btn.innerHTML = "KIRIM LAPORAN KE CLOUD"; btn.disabled = false;
+        }
+
+        // --- FILE INPUT UI ---
+        document.getElementById('inFile').addEventListener('change', function() {
+            const name = this.files[0] ? this.files[0].name : '';
+            const label = document.getElementById('fileName');
+            if(name) { label.innerText = "File terpilih: " + name; label.classList.remove('hidden'); }
+            else { label.classList.add('hidden'); }
+        });
+
+        async function checkStatusCloud() {
+            const token = document.getElementById('trackInput').value.trim();
+            if(!window.globalReports) { alert("Data belum sinkron."); return; }
+            const r = window.globalReports.find(x => x.token === token);
+            const res = document.getElementById('trackResult');
+            if (r) {
+                res.classList.remove('hidden');
+                document.getElementById('tBadge').innerText = r.status;
+                document.getElementById('tMsg').innerText = r.status === 'Investigasi' ? 'Investigasi Berjalan' : 'Laporan diterima.';
+                document.getElementById('tResp').innerText = r.adminResponse || "-";
+                document.getElementById('tBadge').className = `px-3 py-1 rounded-full text-xs font-bold ${r.status === 'Investigasi' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`;
+            } else { alert("Tiket tidak ditemukan."); res.classList.add('hidden'); }
+        }
+
+        let currentCaseId = null;
+        async function saveCaseHandler() {
+            if (!currentCaseId) return;
+            const newData = { status: document.getElementById('dActionStatus').value, adminResponse: document.getElementById('dActionResp').value };
+            const success = await window.updateReportInCloud(currentCaseId, newData);
+            if (success) alert("Status berhasil diupdate.");
+        }
+
+        window.renderAdminList = function() {
+            const list = document.getElementById('reportList'); list.innerHTML = '';
+            const sorted = [...window.globalReports].sort((a, b) => b.createdAt - a.createdAt);
+            if (sorted.length === 0) document.getElementById('emptyAdmin').classList.remove('hidden');
+            else {
+                document.getElementById('emptyAdmin').classList.add('hidden');
+                sorted.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = "p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800 transition";
+                    div.onclick = () => openCase(r);
+                    div.innerHTML = `<div class="flex justify-between mb-1"><span class="text-[10px] font-mono text-slate-500">${r.token}</span><span class="text-[10px] font-bold ${r.status === 'Menunggu' ? 'text-yellow-500' : 'text-teal-500'}">${r.status}</span></div><div class="text-sm text-white font-bold truncate">${r.kategori}</div><div class="text-[10px] text-slate-500 truncate">${r.timestamp}</div>`;
+                    list.appendChild(div);
+                });
+            }
+        }
+
+        function openCase(r) {
+            currentCaseId = r.id;
             document.getElementById('adminMasterList').classList.add('hidden', 'lg:block');
             document.getElementById('adminDetailPanel').classList.remove('translate-x-full');
+            document.getElementById('workspaceEmpty').classList.add('hidden');
+            document.getElementById('workspaceDetail').classList.remove('hidden');
+            document.getElementById('dTicket').innerText = r.token; document.getElementById('dDate').innerText = r.timestamp; document.getElementById('dCat').innerText = r.kategori; document.getElementById('dSuspect').innerText = r.terlapor; document.getElementById('dStatusBadge').innerText = r.status; document.getElementById('dStatusBadge').className = `px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${r.status === 'Investigasi' ? 'bg-orange-900 text-orange-200' : 'bg-slate-700 text-slate-300'}`;
+            document.getElementById('dKron').innerText = r.kronologi; document.getElementById('dBukti').innerText = r.bukti; document.getElementById('dActionStatus').value = r.status; document.getElementById('dActionResp').value = r.adminResponse;
             
-            document.getElementById('workspaceEmpty').classList.add('hidden'); document.getElementById('workspaceDetail').classList.remove('hidden'); 
-            document.getElementById('dTicket').innerText=r.token; document.getElementById('dDate').innerText=r.timestamp; document.getElementById('dCat').innerText=r.kategori; document.getElementById('dSuspect').innerText=r.terlapor; document.getElementById('dStatusBadge').innerText=r.status; document.getElementById('dStatusBadge').className=`px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${r.status==='Investigasi'?'bg-orange-900 text-orange-200':'bg-slate-700 text-slate-300'}`; document.getElementById('dKron').innerText=r.kronologi; document.getElementById('dBukti').innerText=r.bukti; 
-            if(p){ document.getElementById('invDocs').innerHTML=p.investigation.docs.map(i=>`<li>${i}</li>`).join(''); document.getElementById('invFlags').innerHTML=p.investigation.flags.map(i=>`<li>${i}</li>`).join(''); document.getElementById('invQ').innerHTML=p.investigation.questions.map(i=>`<li class="bg-slate-900 p-2 rounded text-xs text-slate-300 border border-slate-700 flex gap-2"><span class="text-purple-400 font-bold">Q:</span> ${i}</li>`).join(''); } 
-            document.getElementById('dActionStatus').value=r.status; document.getElementById('dActionResp').value=r.adminResponse; 
+            // Attachment Handling
+            const attDiv = document.getElementById('dAttachment');
+            if(r.attachment) {
+                attDiv.classList.remove('hidden');
+                document.getElementById('dAttachmentName').innerText = r.attachmentName || "Lampiran";
+                document.getElementById('dAttachmentLink').href = r.attachment;
+                // Show preview if image
+                const imgPrev = document.getElementById('dAttachmentImg');
+                if(r.attachmentType && r.attachmentType.startsWith('image/')) {
+                    imgPrev.src = r.attachment; imgPrev.classList.remove('hidden');
+                } else { imgPrev.classList.add('hidden'); }
+            } else { attDiv.classList.add('hidden'); }
         }
 
-        // Mobile specific: Close Detail Panel
-        function closeAdminDetailMobile() {
-            document.getElementById('adminDetailPanel').classList.add('translate-x-full');
-            document.getElementById('adminMasterList').classList.remove('hidden');
-        }
+        function switchRole(r) { const p=document.getElementById('publicZone'); const s=document.getElementById('secureZone'); if(r==='public'){ p.classList.remove('-translate-x-full'); s.classList.add('translate-x-full'); } else { p.classList.add('-translate-x-full'); s.classList.remove('translate-x-full'); } }
+        function setPublicTab(t) { ['guide','report','track'].forEach(x=>{ document.getElementById(`content-${x}`).classList.add('hidden'); document.getElementById(`tab-${x}`).classList.replace('border-teal-600','border-transparent'); document.getElementById(`tab-${x}`).classList.replace('text-teal-700','text-slate-500'); }); document.getElementById(`content-${t}`).classList.remove('hidden'); document.getElementById(`tab-${t}`).classList.replace('border-transparent','border-teal-600'); document.getElementById(`tab-${t}`).classList.replace('text-slate-500','text-teal-700'); }
+        function authAdmin() { if(document.getElementById('adminPass').value==='audit2024'){ document.getElementById('adminLogin').classList.add('hidden'); document.getElementById('adminDash').classList.remove('hidden'); window.renderAdminList(); switchAdminTab('workspace'); } else document.getElementById('loginErr').classList.remove('hidden'); }
+        function logoutAdmin() { location.reload(); }
+        function closeAdminDetailMobile() { document.getElementById('adminDetailPanel').classList.add('translate-x-full'); document.getElementById('adminMasterList').classList.remove('hidden'); }
+        function switchAdminTab(t) { const w = document.getElementById('admViewWorkspace'); const g = document.getElementById('admViewGuide'); const bW = document.getElementById('btnAdmWork'); const bG = document.getElementById('btnAdmGuide'); if(t === 'workspace') { w.classList.remove('hidden'); g.classList.add('hidden'); bW.classList.add('bg-red-900/30','text-red-300'); bG.classList.remove('bg-red-900/30','text-red-300'); } else { w.classList.add('hidden'); g.classList.remove('hidden'); bG.classList.add('bg-red-900/30','text-red-300'); bW.classList.remove('bg-red-900/30','text-red-300'); loadAdminGuideDetail(1); } }
 
-        function saveCase() { if(!currentCaseId) return; const r=getDB(); const i=r.findIndex(x=>x.id===currentCaseId); if(i!==-1){ r[i].status=document.getElementById('dActionStatus').value; r[i].adminResponse=document.getElementById('dActionResp').value; saveDB(r); loadReports(); openCase(currentCaseId); alert("Update berhasil."); } }
-
+        // Initialize UI
+        const flowCont = document.getElementById('flowContainer'); sopSteps.forEach((s, i) => { const isLast = i === sopSteps.length - 1; const div = document.createElement('div'); div.className = `relative pl-12 md:pl-14 pb-6 md:pb-8 cursor-pointer group ${isLast?'last-step':''}`; div.onclick = () => { loadGuideDetail(s.id); }; div.innerHTML = `<div class="step-line"></div><div class="absolute left-0 top-1 w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-slate-300 bg-white text-slate-400 font-bold flex items-center justify-center text-sm md:text-lg transition-all group-hover:border-teal-500 group-hover:bg-teal-50 group-hover:text-teal-700 z-10">${s.id}</div><h4 class="font-bold text-slate-600 pt-2 md:pt-3 text-xs md:text-sm uppercase tracking-wide group-hover:text-teal-700 transition">${s.title}</h4>`; flowCont.appendChild(div); });
         loadGuideDetail(1);
+        const adminFlow = document.getElementById('adminFlowContainer'); adminSteps.forEach((s, i) => { const isLast = i === adminSteps.length - 1; const div = document.createElement('div'); div.className = `relative pl-12 pb-8 cursor-pointer group ${isLast?'last-step':''}`; div.onclick = () => loadAdminGuideDetail(s.id); div.innerHTML = `<div class="admin-step-line"></div><div class="absolute left-0 top-1 w-10 h-10 rounded-full border-2 border-slate-600 bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-sm transition-all group-hover:border-red-500 group-hover:text-red-400 z-10">${s.id}</div><h4 class="font-bold text-slate-500 pt-2 text-xs uppercase tracking-wide group-hover:text-red-400 transition">${s.title}</h4>`; adminFlow.appendChild(div); });
     </script>
 </body>
 </html>
