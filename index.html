@@ -6,6 +6,9 @@
     <title>WBS - Koperasi Karyawan Adaro Karya Mandiri</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- EMAILJS LIBRARY (Jembatan ke Gmail) -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
     <!-- FIREBASE MODULE -->
     <script type="module">
@@ -13,7 +16,7 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CONFIG (Milik Anda - Jangan Diubah)
+        // CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyDf6wxmYtxDpj4Sd1Pd2a2vjFHU-O_fLV8",
             authDomain: "wbs-adaro-koperasi.firebaseapp.com",
@@ -42,51 +45,48 @@
                         window.renderAdminList();
                     }
                 });
+                
+                // INIT EMAILJS (Ganti dengan Public Key Anda nanti)
+                // Tutorial: Daftar di emailjs.com -> Add Service (Gmail) -> Add Template -> Copy Keys
+                emailjs.init("YOUR_PUBLIC_KEY"); // <--- GANTI INI NANTI
+
             } catch (error) {
                 console.error(error);
                 alert("Gagal koneksi internet.");
             }
         }
 
-        // --- SISTEM NOTIFIKASI WA (BARU) ---
-        window.sendWANotification = async (data) => {
-            // 1. KONFIGURASI TARGET (Nomor Pengawas)
-            const targetPhone = "6285349972513"; 
+        // --- SISTEM NOTIFIKASI EMAIL ---
+        window.sendEmailNotification = async (data) => {
+            const targetEmail = "pecundangsejati04@gmail.com";
             
-            // 2. PESAN OTOMATIS
-            const message = `🚨 *LAPORAN WBS BARU MASUK*\n\n` +
-                            `🎟 *Tiket:* ${data.token}\n` +
-                            `⚠️ *Kategori:* ${data.kategori}\n` +
-                            `👤 *Terlapor:* ${data.terlapor}\n` +
-                            `📅 *Tanggal:* ${data.waktu}\n\n` +
-                            `Mohon segera login ke Dashboard Pengawas untuk verifikasi bukti.\n` +
-                            `_Sistem Integritas Adaro Karya Mandiri_`;
+            // Siapkan parameter untuk template email
+            const templateParams = {
+                to_email: targetEmail,
+                tiket_id: data.token,
+                kategori: data.kategori,
+                terlapor: data.terlapor,
+                waktu: data.waktu,
+                kronologi: data.kronologi,
+                status: "MENUNGGU VERIFIKASI"
+            };
 
-            // 3. LOGIKA PENGIRIMAN (API GATEWAY)
-            // Catatan: Untuk mengaktifkan pengiriman asli, Anda perlu Token API dari penyedia seperti Fonnte.com
-            // Kode di bawah ini sudah siap, tinggal masukkan token di baris 'Authorization'.
-            
-            console.log("Mengirim WA ke: " + targetPhone);
-            
-            /* --- AKTIFKAN BAGIAN INI JIKA SUDAH PUNYA TOKEN FONNTE ---
-            const formData = new FormData();
-            formData.append("target", targetPhone);
-            formData.append("message", message);
-            
+            console.log("Mengirim email ke: " + targetEmail);
+
+            // --- AKTIFKAN KODE INI SETELAH PUNYA AKUN EMAILJS ---
+            /*
             try {
-                await fetch("https://api.fonnte.com/send", {
-                    method: 'POST',
-                    headers: { 
-                        "Authorization": "MASUKKAN_TOKEN_FONNTE_DISINI" // Ganti dengan Token Anda
-                    },
-                    body: formData
-                });
-            } catch (e) { console.error("Gagal koneksi WA Gateway", e); }
-            ----------------------------------------------------------- */
-
-            // SIMULASI (Agar terlihat berjalan di demo ini)
-            // console.log("Simulasi Pesan Terkirim:", message);
-            // alert("Info: Notifikasi WA sedang dikirim ke Pengawas (" + targetPhone + ")...");
+                await emailjs.send('YOUR_SERVICE_ID', 'YOUR_TEMPLATE_ID', templateParams);
+                console.log("Email terkirim sukses!");
+                alert("Notifikasi email telah dikirim ke Pengawas.");
+            } catch (error) {
+                console.error('Gagal kirim email:', error);
+                // Jangan gagalkan laporan jika email gagal, cukup log saja
+            }
+            */
+           
+           // Simulasi untuk Demo
+           console.log("Simulasi Email Sent to:", targetEmail, templateParams);
         };
 
         // Helper Base64
@@ -111,8 +111,8 @@
                 }
                 await addDoc(collection(db, COLLECTION_NAME), data);
                 
-                // TRIGGER NOTIFIKASI WA SETELAH DATA TERSIMPAN
-                window.sendWANotification(data);
+                // TRIGGER EMAIL
+                window.sendEmailNotification(data);
 
                 return true;
             } catch (e) { alert("Gagal: " + e.message); return false; }
@@ -149,7 +149,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen flex flex-col overflow-hidden">
 
-    <!-- NAVBAR (MOBILE OPTIMIZED) -->
+    <!-- NAVBAR (REDESIGNED FOR MOBILE) -->
     <nav id="mainNav" class="bg-white border-b border-slate-200 transition-colors duration-300 z-50 shrink-0 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 py-3 md:py-0 md:h-20 flex flex-col md:flex-row justify-between items-center gap-3 md:gap-0">
             
@@ -162,7 +162,7 @@
                 </div>
             </div>
             
-            <!-- Role Switcher -->
+            <!-- Role Switcher (Stacked on Mobile) -->
             <div class="flex w-full md:w-auto space-x-2 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
                 <button onclick="switchRole('public')" id="btnPublic" class="flex-1 md:flex-none px-4 py-2 rounded text-xs md:text-sm font-bold bg-white shadow-sm text-teal-700 ring-1 ring-slate-200 transition text-center">PELAPOR</button>
                 <button onclick="switchRole('admin')" id="btnAdmin" class="flex-1 md:flex-none px-4 py-2 rounded text-xs md:text-sm font-bold text-slate-500 hover:text-slate-800 transition text-center">PENGAWAS</button>
@@ -177,7 +177,7 @@
         <div id="publicZone" class="absolute inset-0 flex flex-col overflow-hidden transition-transform duration-300 bg-slate-50">
             <div class="flex flex-col h-full max-w-7xl mx-auto w-full">
                 
-                <!-- Tabs -->
+                <!-- Tabs (Sticky) -->
                 <div class="flex border-b border-slate-200 bg-white px-4 md:px-8 space-x-4 md:space-x-6 overflow-x-auto custom-scroll shrink-0 whitespace-nowrap sticky top-0 z-40">
                     <button onclick="setPublicTab('guide')" class="py-3 md:py-4 border-b-2 border-teal-600 font-bold text-teal-700 text-xs md:text-sm transition" id="tab-guide">PANDUAN SOP</button>
                     <button onclick="setPublicTab('report')" class="py-3 md:py-4 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 text-xs md:text-sm transition" id="tab-report">FORM LAPORAN</button>
@@ -213,7 +213,7 @@
                     <div id="content-report" class="hidden fade-in max-w-6xl mx-auto pb-20">
                         <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col lg:flex-row">
                             <div class="w-full lg:w-7/12 p-5 md:p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-slate-100">
-                                <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-6">Formulir Laporan</h2>
+                                <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-6">Formulir Laporan Aman</h2>
                                 <form onsubmit="submitReportHandler(event)" class="space-y-4 md:space-y-5">
                                     <div class="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200"><label class="block text-xs font-bold text-yellow-800 uppercase mb-2">1. Kategori Pelanggaran</label><select id="inKategori" onchange="updateLegalInfo()" required class="w-full p-2.5 md:p-3 border border-yellow-300 rounded-lg bg-white focus:ring-4 focus:ring-yellow-100 outline-none text-sm font-bold text-slate-700"><option value="" disabled selected>-- Pilih Jenis Kasus --</option><option value="Korupsi">Korupsi / Suap / Gratifikasi</option><option value="Penggelapan">Penggelapan Jabatan (Aset/Uang)</option><option value="Pemalsuan">Pemalsuan Dokumen / Laporan</option><option value="Pencurian">Pencurian Fisik / Kas</option><option value="SOP">Pelanggaran Berat SOP & Etika</option></select></div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
@@ -222,7 +222,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between"><span>4. Kronologi (5W + 1H)</span><span class="text-teal-600 text-[10px]">Wajib Detail</span></label>
-                                        <div class="bg-blue-50 p-3 rounded-t-lg border border-blue-100 border-b-0"><p class="text-[10px] text-blue-800 font-medium">💡 <strong>Panduan 5W+1H:</strong><br>• <strong>Who:</strong> Siapa? • <strong>When:</strong> Kapan?<br>• <strong>Where:</strong> Dimana? • <strong>What:</strong> Apa?<br>• <strong>Why:</strong> Kenapa? • <strong>How:</strong> Bagaimana?</p></div>
+                                        <div class="bg-blue-50 p-3 rounded-t-lg border border-blue-100 border-b-0"><p class="text-[10px] text-blue-800 font-medium">💡 <strong>Panduan 5W+1H:</strong><br>• <strong>Who:</strong> Siapa pelakunya?<br>• <strong>When:</strong> Kapan kejadiannya?<br>• <strong>Where:</strong> Dimana?<br>• <strong>What:</strong> Apa tindakannya?<br>• <strong>Why:</strong> Kenapa?<br>• <strong>How:</strong> Bagaimana caranya?</p></div>
                                         <textarea id="inKronologi" rows="6" required class="w-full p-3 border border-slate-300 rounded-b-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Contoh: Pada hari Senin (20/10) di Gudang A..."></textarea>
                                     </div>
                                     <div class="space-y-2">
@@ -274,7 +274,7 @@
             </div>
 
             <div id="adminDash" class="flex-grow flex flex-col hidden h-full">
-                <!-- Admin Header (Responsive) -->
+                <!-- Admin Header Responsive -->
                 <div class="bg-slate-950 px-4 md:px-6 py-3 md:py-4 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center shrink-0 gap-3">
                     <div class="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
                         <div class="flex items-center gap-4">
@@ -288,7 +288,8 @@
                 <div id="admViewWorkspace" class="flex flex-grow overflow-hidden fade-in relative">
                     <div id="adminMasterList" class="w-full lg:w-80 border-r border-slate-800 bg-slate-900 overflow-y-auto custom-scroll shrink-0 absolute lg:relative inset-0 z-10">
                         <div class="p-4 border-b border-slate-800 sticky top-0 bg-slate-900 z-10 flex justify-between"><h3 class="text-[10px] font-bold text-slate-500 uppercase">Live Reports</h3><span class="text-[10px] text-slate-600 lg:hidden">Tap to view</span></div>
-                        <div id="reportList" class="divide-y divide-slate-800"></div><div id="emptyAdmin" class="p-10 text-center text-slate-600 text-xs hidden">Menunggu data cloud...</div>
+                        <div id="reportList" class="divide-y divide-slate-800"></div>
+                        <div id="emptyAdmin" class="p-10 text-center text-slate-600 text-xs hidden">Menunggu data cloud...</div>
                     </div>
                     <div id="adminDetailPanel" class="w-full lg:flex-grow bg-slate-800 overflow-y-auto custom-scroll p-4 md:p-8 absolute lg:relative inset-0 z-20 translate-x-full lg:translate-x-0 transition-transform duration-300">
                         <div class="lg:hidden mb-4"><button onclick="closeAdminDetailMobile()" class="flex items-center text-slate-400 text-sm font-bold"><svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>KEMBALI</button></div>
@@ -335,8 +336,8 @@
         </div>
     </main>
 
+    <!-- SCRIPT (SAME LOGIC) -->
     <script>
-        // --- DATA OBJECTS (UNCHANGED) ---
         const sopSteps = [ { id: 1, title: "Validasi & Niat", desc: "Pastikan laporan Anda memiliki dasar hukum, bukan hanya emosi. Apakah ini pelanggaran aturan tertulis?", strat: "Gunakan 'Matriks Kelayakan': 1. Apakah ada aturan tertulis yang dilanggar? 2. Apakah ada kerugian materiil/immateriil? 3. Apakah ini kejadian berulang?", dos: ["Cek aturan perusahaan/PKB.", "Hitung estimasi kerugian kasar.", "Fokus pada fakta, bukan orangnya."], donts: ["Melapor hanya karena tidak suka pribadi (Dislike).", "Melapor berdasarkan rumor/gosip kantin.", "Menebak-nebak tanpa data dasar."] }, { id: 2, title: "Isolasi Digital", desc: "Lindungi jejak digital Anda. Anggap semua perangkat kantor dipantau oleh admin IT.", strat: "Prinsip 'Air Gap': Pisahkan aktivitas pelaporan dari jaringan kantor secara fisik.", dos: ["Gunakan HP/Laptop pribadi.", "Gunakan Paket Data Seluler sendiri.", "Gunakan Browser Mode Incognito."], donts: ["Menggunakan WiFi Kantor.", "Login email pelapor di PC Kantor.", "Mengirim bukti ke email korporat."] }, { id: 3, title: "Dokumentasi Senyap", desc: "Kumpulkan bukti statis tanpa memicu kecurigaan. Jadilah 'Hantu' di sistem.", strat: "Bukti terbaik adalah yang tidak bisa disangkal (Dokumen, Log, Foto). Hindari bukti lisan.", dos: ["Foto layar komputer saat sepi.", "Screenshot chat/email mencurigakan.", "Simpan di Cloud Pribadi."], donts: ["Membawa pulang dokumen asli (Pencurian!).", "Mencolokkan Flashdisk pribadi ke PC Kantor.", "Merekam percakapan tanpa izin."] }, { id: 4, title: "Kronologi Taktis", desc: "Susun cerita yang memudahkan investigator bekerja. Fokus pada 5W+1H.", strat: "Urutkan kejadian berdasarkan waktu (Timeline). Ini memudahkan pencocokan log.", dos: ["Tulis spesifik: Siapa, Kapan, Dimana.", "Sebutkan nominal angka jika tahu.", "Gunakan bahasa netral."], donts: ["Menggunakan kata sifat emosional.", "Mencampuradukkan fakta dengan opini.", "Menulis terlalu panjang."] }, { id: 5, title: "Eksekusi Lapor", desc: "Kirim data melalui aplikasi WBS ini. Sistem menggunakan enkripsi satu arah.", strat: "Lakukan di luar jam kerja atau saat jam istirahat di lokasi sepi.", dos: ["Isi semua kolom wajib.", "Simpan Tiket ID di Catatan HP.", "Langsung tutup tab browser."], donts: ["Share Tiket ID ke rekan kerja.", "Melapor hal yang sama berulang-ulang.", "Screenshot bukti lapor di Galeri umum."] }, { id: 6, title: "Mode Kamuflase", desc: "Kunci keberhasilan adalah perilaku Anda pasca-lapor. Jangan berubah!", strat: "Teknik 'Business as Usual': Jika biasa pendiam, tetap diam.", dos: ["Bekerja seperti biasa.", "Tetap ramah pada terlapor.", "Pura-pura kaget jika isu mencuat."], donts: ["Tiba-tiba menghindar.", "Berbisik-bisik mencurigakan.", "Menyindir terlapor di medsos."] }, { id: 7, title: "Monitoring Aman", desc: "Pantau status laporan hanya melalui jalur aman.", strat: "Komunikasi hanya via fitur 'Cek Status' di aplikasi ini.", dos: ["Cek status seminggu sekali.", "Jawab respon admin di sistem.", "Percayakan proses pada tim."], donts: ["Bertanya progres ke Pengurus.", "Membuka identitas diri.", "Kecewa terbuka."] } ];
         const protocols = { "Korupsi": { legal: { title: "Korupsi / Suap / Gratifikasi", pasal_code: "Pasal 2 ayat (1) & Pasal 3 UU 31/1999 jo. UU 20/2001", pasal_desc: "\"Setiap orang yang secara melawan hukum melakukan perbuatan memperkaya diri sendiri atau orang lain atau suatu korporasi...\" (Pasal 2). \"Setiap orang yang dengan tujuan menguntungkan diri sendiri... menyalahgunakan kewenangan...\" (Pasal 3).", prison: "4 - 20 Tahun Penjara", fine: "Rp 200 Juta - Rp 1 Miliar" } }, "Penggelapan": { legal: { title: "Penggelapan Dalam Jabatan", pasal_code: "KUHP Pasal 372 & 374", pasal_desc: "\"Barang siapa dengan sengaja dan melawan hukum memiliki barang sesuatu yang seluruhnya atau sebagian adalah kepunyaan orang lain...\" (Pasal 372). Diperberat jika dilakukan oleh orang yang memegang barang itu karena jabatannya (Pasal 374).", prison: "Maksimal 5 Tahun", fine: "Denda + Ganti Rugi Penuh" } }, "Pemalsuan": { legal: { title: "Pemalsuan Dokumen / Laporan", pasal_code: "KUHP Pasal 263 Ayat (1)", pasal_desc: "\"Barangsiapa dengan sengaja dan melawan hukum memalsukan surat-surat yang dapat menimbulkan kerugian bagi orang lain atau barangsiapa menyerahkan surat-surat yang dipalsukan itu seolah-olah asli...\"", prison: "Maksimal 6 Tahun", fine: "Sanksi Pidana" } }, "Pencurian": { legal: { title: "Pencurian Fisik / Kas", pasal_code: "KUHP Pasal 362", pasal_desc: "\"Barangsiapa mengambil barang sesuatu, yang seluruhnya atau sebagian kepunyaan orang lain, dengan maksud untuk dimiliki secara melawan hukum...\" (Pencurian Biasa).", prison: "Maksimal 5 Tahun", fine: "Audit Restitusi (Ganti Rugi)" } }, "SOP": { legal: { title: "Pelanggaran Berat SOP & Etika", pasal_code: "UU 17/2012 (Pasal 64) & KUHP 372 (Jika Fraud)", pasal_desc: "\"Pengurus dapat diberhentikan berdasarkan keputusan Rapat Anggota...\" (Sanksi Internal). Jika unsur fraud terpenuhi, dikenakan pasal Penggelapan.", prison: "4 Tahun (Jika Fraud)", fine: "Pemecatan (PHK) + Pidana" } } };
         const adminSteps = [ { id: 1, title: "Telaah Awal", icon: "🔍", desc: "Analisis laporan untuk memisahkan 'noise' dari 'signal'.", goal: "Validasi layak investigasi.", risk: "Investigasi Prematur.", check: ["Cek 5W+1H.", "Cek wewenang terlapor.", "Hitung kerugian."] }, { id: 2, title: "Bentuk Tim", icon: "👥", desc: "Tim steril dari konflik kepentingan.", goal: "Objektifitas.", risk: "Kebocoran Internal.", check: ["Cek relasi.", "Wajib NDA.", "Cover Story."] }, { id: 3, title: "Forensik Data", icon: "💾", desc: "Amankan bukti digital/fisik SEBELUM interaksi.", goal: "Chain of Custody.", risk: "Penghancuran Bukti.", check: ["Image Copy HDD.", "Log CCTV.", "Amankan Dokumen."] }, { id: 4, title: "Observasi", icon: "👀", desc: "Validasi data forensik di lapangan.", goal: "Konfirmasi anomali.", risk: "Eksposur Dini.", check: ["Stock Opname.", "Cek fisik.", "Gaya hidup."] }, { id: 5, title: "Interogasi", icon: "🗣️", desc: "Konfrontasi setelah bukti lengkap.", goal: "Pengakuan.", risk: "Debat Kusir.", check: ["Ruangan netral.", "Open Questions.", "Bukti bertahap."] }, { id: 6, title: "Laporan (LHA)", icon: "📝", desc: "Susun Laporan Hasil Audit.", goal: "Rekomendasi Sanksi.", risk: "Bias Kesimpulan.", check: ["Kronologi.", "Hitung Kerugian.", "Rekomendasi."] } ];
@@ -351,21 +352,12 @@
             if(name) { label.innerText = "File: " + name; label.classList.remove('hidden'); } else label.classList.add('hidden');
         });
 
-        // --- NOTIFIKASI WA (Backend Logic) ---
-        window.sendWANotification = async (data) => {
-            const target = "6285349972513"; 
-            const message = `🚨 *Laporan WBS Baru Masuk!*\n\n` +
-                            `🎟 Tiket: ${data.token}\n` +
-                            `⚠️ Kategori: ${data.kategori}\n` +
-                            `👤 Terlapor: ${data.terlapor}\n` +
-                            `📅 Tanggal: ${data.waktu}\n\n` +
-                            `Mohon cek dashboard Admin.`;
-            
-            // Integrasi Fonnte (Opsional - Perlu Token)
-            /* const formData = new FormData(); formData.append("target", target); formData.append("message", message);
-            try { await fetch("https://api.fonnte.com/send", { method: 'POST', headers: { "Authorization": "TOKEN_FONNTE_ANDA" }, body: formData }); } catch (e) { console.error("Gagal kirim WA", e); }
-            */
-            console.log("Simulasi Kirim WA ke " + target + ": " + message);
+        // EMAIL NOTIFICATION
+        window.sendEmailNotification = async (data) => {
+            const targetEmail = "pecundangsejati04@gmail.com";
+            const templateParams = { to_email: targetEmail, tiket_id: data.token, kategori: data.kategori, terlapor: data.terlapor, waktu: data.waktu, kronologi: data.kronologi, status: "MENUNGGU VERIFIKASI" };
+            console.log("Simulasi Email ke: " + targetEmail);
+            // emailjs.send('YOUR_SERVICE_ID', 'YOUR_TEMPLATE_ID', templateParams); // Enable later
         };
 
         async function submitReportHandler(e) {
@@ -374,12 +366,7 @@
             const reportData = { token: token, kategori: document.getElementById('inKategori').value, terlapor: document.getElementById('inTerlapor').value, waktu: document.getElementById('inWaktu').value, kronologi: document.getElementById('inKronologi').value, buktiText: document.getElementById('inBukti').value, status: 'Menunggu', adminResponse: '', timestamp: new Date().toLocaleDateString('id-ID'), createdAt: Date.now() };
             const file = document.getElementById('inFile').files[0];
             const success = await window.sendReportToCloud(reportData, file);
-            if (success) { 
-                document.getElementById('ticketDisplay').innerText = token; 
-                document.getElementById('modalSuccess').classList.remove('hidden'); 
-                document.forms[0].reset(); 
-                document.getElementById('fileName').classList.add('hidden'); 
-            }
+            if (success) { document.getElementById('ticketDisplay').innerText = token; document.getElementById('modalSuccess').classList.remove('hidden'); document.forms[0].reset(); document.getElementById('fileName').classList.add('hidden'); }
             btn.innerHTML = "KIRIM LAPORAN"; btn.disabled = false;
         }
 
@@ -390,10 +377,7 @@
             if (r) { res.classList.remove('hidden'); document.getElementById('tBadge').innerText = r.status; document.getElementById('tMsg').innerText = r.status === 'Investigasi' ? 'Investigasi Berjalan' : 'Laporan diterima.'; document.getElementById('tResp').innerText = r.adminResponse || "-"; document.getElementById('tBadge').className = `px-3 py-1 rounded-full text-xs font-bold ${r.status === 'Investigasi' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`; } else { alert("Tiket tidak ditemukan."); res.classList.add('hidden'); }
         }
 
-        let currentCaseId = null;
-        let currentAttachment = null;
-        let currentAttachmentType = null;
-
+        let currentCaseId = null; let currentAttachment = null; let currentAttachmentType = null;
         async function saveCaseHandler() { if (!currentCaseId) return; const success = await window.updateReportInCloud(currentCaseId, { status: document.getElementById('dActionStatus').value, adminResponse: document.getElementById('dActionResp').value }); if (success) alert("Update berhasil."); }
 
         window.previewAttachment = function() {
