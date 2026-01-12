@@ -16,7 +16,7 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, where, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CONFIG
+        // CONFIG (Milik Anda)
         const firebaseConfig = {
             apiKey: "AIzaSyDf6wxmYtxDpj4Sd1Pd2a2vjFHU-O_fLV8",
             authDomain: "wbs-adaro-koperasi.firebaseapp.com",
@@ -105,12 +105,19 @@
             container.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">Memuat...</div>';
             if (window.currentChatUnsubscribe) window.currentChatUnsubscribe();
             
-            const q = query(collection(db, CHAT_COLLECTION), where("reportId", "==", reportId), orderBy("createdAt", "asc"));
+            // FIX: Removed orderBy from query to avoid index error
+            const q = query(collection(db, CHAT_COLLECTION), where("reportId", "==", reportId));
+            
             window.currentChatUnsubscribe = onSnapshot(q, (snapshot) => {
                 container.innerHTML = '';
                 if (snapshot.empty) { container.innerHTML = '<div class="text-center text-xs text-slate-400 py-10">Mulai diskusi di sini.</div>'; return; }
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
+                
+                // Sort client-side
+                const messages = snapshot.docs
+                    .map(doc => doc.data())
+                    .sort((a, b) => a.createdAt - b.createdAt);
+
+                messages.forEach(data => {
                     const isMe = (containerId === 'publicChatBox' && data.sender === 'pelapor') || (containerId === 'adminChatBox' && data.sender === 'admin');
                     const bubble = document.createElement('div');
                     bubble.className = `flex w-full mb-3 ${isMe ? 'justify-end' : 'justify-start'}`;
@@ -482,8 +489,14 @@
             document.getElementById('dTicket').innerText = r.token; document.getElementById('dDate').innerText = r.timestamp; document.getElementById('dCat').innerText = r.kategori; document.getElementById('dSuspect').innerText = r.terlapor; document.getElementById('dStatusBadge').innerText = r.status; document.getElementById('dStatusBadge').className = `px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${r.status === 'Investigasi' ? 'bg-orange-900 text-orange-200' : 'bg-slate-700 text-slate-300'}`;
             document.getElementById('dKron').innerText = r.kronologi; document.getElementById('dBukti').innerText = r.buktiText || "-"; document.getElementById('dActionStatus').value = r.status; 
             
-            const linkDiv = document.getElementById('dAttachment'); const noLink = document.getElementById('dNoAttachment');
-            if(r.buktiLink) { linkDiv.classList.remove('hidden'); noLink.classList.add('hidden'); document.getElementById('dAttachmentLink').href = r.buktiLink; document.getElementById('dAttachmentName').innerText = r.buktiLink; } else { linkDiv.classList.add('hidden'); noLink.classList.remove('hidden'); }
+            const attDiv = document.getElementById('dAttachment');
+            // FIX: Using direct attachment logic again
+            if(r.attachment) { 
+                attDiv.classList.remove('hidden'); 
+                document.getElementById('dAttachmentName').innerText = r.attachmentName || "Lampiran"; 
+            } else { 
+                attDiv.classList.add('hidden'); 
+            }
             
             window.loadChatRoom(r.id, 'adminChatBox');
         }
