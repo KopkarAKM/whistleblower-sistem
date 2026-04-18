@@ -67,6 +67,12 @@
             reader.onerror = error => reject(error);
         });
 
+        // --- SANITIZE INPUT ---
+        window.sanitize = (str) => {
+            if (!str) return '';
+            return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;').trim().slice(0, 2000);
+        };
+
         // --- PREVIEW ENGINE ---
         window.previewAttachment = function() {
             if (!window.currentAttachment) { alert("Tidak ada lampiran."); return; }
@@ -131,19 +137,16 @@
         };
 
         // --- SUBMIT HANDLER ---
-        window.sendReportToCloud = async (data, file) => {
+        window.sendReportToCloud = async (data) => {
             if (!window.isDbReady) { alert("Menghubungkan..."); return false; }
+            // Rate limiting: max 3 submissions per 10 minutes
+            const now = Date.now();
+            const submits = JSON.parse(localStorage.getItem('wbs_submits') || '[]').filter(t => now - t < 10 * 60 * 1000);
+            if (submits.length >= 3) { alert("Terlalu banyak laporan. Tunggu beberapa menit."); return false; }
+            submits.push(now);
+            localStorage.setItem('wbs_submits', JSON.stringify(submits));
             try {
-                if (file) {
-                    if (file.size > 800 * 1024) { 
-                        alert("File terlalu besar (Max 800KB)."); return false;
-                    }
-                    data.attachment = await window.fileToBase64(file);
-                    data.attachmentName = file.name;
-                    data.attachmentType = file.type;
-                }
-                await addDoc(collection(db, COLLECTION_NAME), data);
-                
+                await addDoc(collection(db, REPORT_COLLECTION), data);
                 const targetEmail = "pecundangsejati04@gmail.com";
                 const params = { to_email: targetEmail, tiket_id: data.token, kategori: data.kategori, terlapor: data.terlapor, waktu: data.waktu, kronologi: data.kronologi, status: "MENUNGGU VERIFIKASI" };
                 emailjs.send('service_58hhn83', 'template_ven7fc8', params).catch(err => console.log("Email skip:", err));
@@ -154,7 +157,7 @@
         };
 
         window.updateReportInCloud = async (docId, newData) => {
-            try { await updateDoc(doc(db, COLLECTION_NAME, docId), newData); return true; }
+            try { await updateDoc(doc(db, REPORT_COLLECTION, docId), newData); return true; }
             catch (e) { alert("Gagal update: " + e.message); return false; }
         };
 
@@ -245,18 +248,24 @@
                                         <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Tanggal</label><input type="date" id="inWaktu" required class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm"></div>
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between"><span>4. Kronologi (5W + 1H)</span><span class="text-teal-600 text-[10px]">Wajib Detail</span></label>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">
+                                            <span>4. Kronologi (5W + 1H)</span>
+                                            <span class="text-teal-600 text-[10px]">Wajib Detail (min. 30 karakter)</span>
+                                        </label>
                                         <div class="bg-blue-50 p-3 rounded-t-lg border border-blue-100 border-b-0"><p class="text-[10px] text-blue-800 font-medium">💡 <strong>Panduan 5W+1H:</strong><br>• <strong>Who:</strong> Siapa pelakunya?<br>• <strong>When:</strong> Kapan kejadiannya?<br>• <strong>Where:</strong> Dimana?<br>• <strong>What:</strong> Apa tindakannya?<br>• <strong>Why:</strong> Kenapa?<br>• <strong>How:</strong> Bagaimana caranya?</p></div>
-                                        <textarea id="inKronologi" rows="6" required class="w-full p-3 border border-slate-300 rounded-b-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Contoh: Pada hari Senin (20/10) di Gudang A..."></textarea>
+                                        <textarea id="inKronologi" rows="6" required oninput="document.getElementById('charCount').innerText=this.value.length" class="w-full p-3 border border-slate-300 rounded-b-lg focus:border-teal-500 outline-none transition text-sm" placeholder="Contoh: Pada hari Senin (20/10) di Gudang A..."></textarea>
+                                        <div class="text-right text-[10px] text-slate-400 mt-1"><span id="charCount">0</span>/2000 karakter</div>
                                     </div>
                                     <div class="space-y-2">
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">5. Bukti Awal (Upload / Teks)</label>
-                                        <textarea id="inBukti" rows="2" class="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white transition text-sm" placeholder="Deskripsi bukti jika tidak ada file..."></textarea>
-                                        <div class="relative border-2 border-dashed border-slate-300 rounded-lg p-4 hover:bg-slate-50 transition text-center cursor-pointer group">
-                                            <input type="file" id="inFile" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,.pdf">
-                                            <div class="space-y-1"><svg class="mx-auto h-8 w-8 text-slate-400 group-hover:text-teal-500 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg><div class="text-xs text-slate-500"><span class="font-bold text-teal-600">Klik Upload</span> (Foto/PDF)</div><p class="text-[10px] text-slate-400">Max 800KB</p></div>
-                                            <p id="fileName" class="text-xs font-bold text-teal-700 mt-2 hidden"></p>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">5. Deskripsi Bukti</label>
+                                        <textarea id="inBukti" rows="2" class="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white transition text-sm" placeholder="Jelaskan bukti yang Anda miliki..."></textarea>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">6. Link Bukti Google Drive <span class="text-slate-400 font-normal normal-case">(opsional)</span></label>
+                                        <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-2">
+                                            <p class="text-[10px] text-blue-800 leading-relaxed">📁 <strong>Cara aman upload bukti:</strong><br>1. Buka <strong>Google Drive</strong> di HP pribadi Anda<br>2. Upload foto/dokumen bukti<br>3. Klik kanan → "Bagikan" → ubah ke <strong>"Siapa saja yang memiliki link"</strong><br>4. Salin link dan tempel di bawah</p>
                                         </div>
+                                        <input type="url" id="inDriveLink" class="w-full p-3 border border-slate-300 rounded-lg focus:border-teal-500 outline-none transition text-sm font-mono" placeholder="https://drive.google.com/...">
                                     </div>
                                     <button type="submit" id="btnSubmitForm" class="w-full bg-slate-900 text-white font-bold py-3 md:py-4 rounded-xl hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2 text-sm md:text-base">KIRIM LAPORAN</button>
                                 </form>
@@ -279,7 +288,26 @@
                             <p class="text-slate-500 mb-6 md:mb-8 text-xs md:text-sm">Masukkan Tiket ID untuk melihat status & diskusi.</p>
                             <input type="text" id="trackInput" placeholder="#TICKET-XXXX" class="w-full p-3 md:p-4 border-2 rounded-xl text-center font-mono uppercase text-lg md:text-2xl mb-4 md:mb-6 focus:border-teal-500 outline-none tracking-widest text-slate-700">
                             <button onclick="checkStatusCloud()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition text-sm md:text-base">MASUK</button>
-                            <div id="trackResult" class="hidden mt-8 text-left bg-slate-50 p-6 rounded-xl border border-slate-200"><div class="flex justify-between items-center mb-4"><span class="text-xs font-bold text-slate-400 uppercase">Status Terkini</span><span id="tBadge" class="px-3 py-1 rounded-full text-xs font-bold"></span></div><p id="tMsg" class="text-base md:text-lg font-medium text-slate-800 mb-4"></p><div class="mt-6 border-t border-slate-200 pt-6"><h4 class="text-sm font-bold text-teal-700 mb-3 flex items-center gap-2">💬 Ruang Diskusi Anonim</h4><div id="publicChatBox" class="bg-white border border-slate-200 rounded-lg h-64 overflow-y-auto p-4 mb-3 custom-scroll flex flex-col gap-2"></div><div class="flex gap-2"><input type="text" id="publicChatInput" placeholder="Tulis pesan ke pengawas..." class="flex-grow p-2 border rounded-lg text-sm focus:border-teal-500 outline-none"><button onclick="sendPublicChat()" class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Kirim</button></div></div></div>
+                            <div id="trackResult" class="hidden mt-8 text-left bg-slate-50 p-6 rounded-xl border border-slate-200">
+                                <div class="flex justify-between items-center mb-4">
+                                    <span class="text-xs font-bold text-slate-400 uppercase">Status Terkini</span>
+                                    <span id="tBadge" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+                                </div>
+                                <p id="tMsg" class="text-base md:text-lg font-medium text-slate-800 mb-4"></p>
+                                <div id="tDriveLink" class="hidden mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                                    <span class="text-blue-500 text-lg">📁</span>
+                                    <div class="flex-1"><div class="text-xs text-blue-600 font-bold uppercase mb-0.5">Bukti Google Drive</div>
+                                    <a id="tDriveLinkAnchor" href="#" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-700 underline break-all">Klik untuk membuka bukti</a></div>
+                                </div>
+                                <div class="mt-6 border-t border-slate-200 pt-6">
+                                    <h4 class="text-sm font-bold text-teal-700 mb-3 flex items-center gap-2">💬 Ruang Diskusi Anonim</h4>
+                                    <div id="publicChatBox" class="bg-white border border-slate-200 rounded-lg h-64 overflow-y-auto p-4 mb-3 custom-scroll flex flex-col gap-2"></div>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="publicChatInput" placeholder="Tulis pesan ke pengawas..." class="flex-grow p-2 border rounded-lg text-sm focus:border-teal-500 outline-none">
+                                        <button onclick="sendPublicChat()" class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Kirim</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -306,7 +334,17 @@
                             <h2 class="font-bold text-white tracking-wide text-xs md:text-sm font-mono border-r border-slate-700 pr-4">WORKSPACE</h2>
                             <div class="flex space-x-2"><button onclick="switchAdminTab('workspace')" id="btnAdmWork" class="text-[10px] font-bold px-2 py-1.5 rounded bg-red-900/30 text-red-300 border border-red-900/50">KASUS</button><button onclick="switchAdminTab('guide')" id="btnAdmGuide" class="text-[10px] font-bold px-2 py-1.5 rounded text-slate-500 hover:text-slate-300">SOP</button></div>
                         </div>
-                        <button onclick="logoutAdmin()" class="text-[10px] text-red-400 font-bold border border-red-900 px-2 md:px-3 py-1 rounded bg-red-900/10 md:ml-4">KELUAR</button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="exportReports()" class="text-[10px] text-teal-400 font-bold border border-teal-900 px-2 md:px-3 py-1 rounded bg-teal-900/10 hover:bg-teal-900/30 transition">📥 EXPORT</button>
+                            <button onclick="logoutAdmin()" class="text-[10px] text-red-400 font-bold border border-red-900 px-2 md:px-3 py-1 rounded bg-red-900/10">KELUAR</button>
+                        </div>
+                    </div>
+                    <!-- Stats Bar -->
+                    <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto custom-scroll">
+                        <div class="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg shrink-0"><span class="text-[10px] text-slate-400 uppercase font-mono">Total</span><span id="cntTotal" class="text-sm font-bold text-white">0</span></div>
+                        <div class="flex items-center gap-1.5 bg-yellow-900/30 px-3 py-1.5 rounded-lg shrink-0 border border-yellow-900/40"><span class="text-[10px] text-yellow-400 uppercase font-mono">Menunggu</span><span id="cntPending" class="text-sm font-bold text-yellow-300">0</span></div>
+                        <div class="flex items-center gap-1.5 bg-orange-900/30 px-3 py-1.5 rounded-lg shrink-0 border border-orange-900/40"><span class="text-[10px] text-orange-400 uppercase font-mono">Aktif</span><span id="cntActive" class="text-sm font-bold text-orange-300">0</span></div>
+                        <div class="flex items-center gap-1.5 bg-green-900/30 px-3 py-1.5 rounded-lg shrink-0 border border-green-900/40"><span class="text-[10px] text-green-400 uppercase font-mono">Selesai</span><span id="cntDone" class="text-sm font-bold text-green-300">0</span></div>
                     </div>
                 </div>
 
@@ -331,11 +369,14 @@
                                     <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
                                         <h4 class="text-[10px] font-bold text-teal-600 uppercase mb-3">Bukti & Lampiran</h4>
                                         <p id="dBukti" class="text-teal-400 text-sm font-mono border-l-2 border-teal-800 pl-4 mb-4"></p>
-                                        <div id="dAttachment" class="hidden flex flex-col gap-3">
-                                            <button onclick="previewAttachment()" class="flex items-center gap-3 bg-slate-800 p-3 rounded-lg border border-slate-600 hover:bg-slate-700 transition w-full text-left">
-                                                <div class="bg-slate-700 p-2 rounded text-white">📎</div><div><div class="text-xs text-slate-400">Lampiran</div><div id="dAttachmentName" class="text-sm font-bold text-white truncate max-w-[200px]"></div></div><div class="text-xs text-teal-400 ml-auto font-bold border border-teal-400 px-3 py-1 rounded hover:bg-teal-900">BUKA ▶</div>
-                                            </button>
+                                        <div id="dDriveLink" class="hidden flex items-center gap-3 bg-slate-800 p-3 rounded-lg border border-slate-600 hover:bg-slate-700 transition">
+                                            <div class="bg-blue-600/30 p-2 rounded text-blue-400 text-xl shrink-0">📁</div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="text-[10px] text-slate-400 uppercase font-bold mb-0.5">Bukti Google Drive</div>
+                                                <a id="dDriveLinkAnchor" href="#" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 underline break-all hover:text-blue-300">Klik untuk membuka bukti di Google Drive ↗</a>
+                                            </div>
                                         </div>
+                                        <div id="dAttachment" class="hidden"></div>
                                     </div>
                                     <div class="bg-slate-900 p-4 rounded-xl border border-yellow-700/30 shadow-lg"><h4 class="text-yellow-500 font-bold text-xs uppercase mb-4">Tindak Lanjut</h4><div class="flex flex-col gap-4"><div><label class="block text-[10px] text-slate-500 uppercase mb-1">Status</label><select id="dActionStatus" class="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg text-sm outline-none focus:border-yellow-500"><option value="Menunggu">Menunggu</option><option value="Investigasi">Investigasi</option><option value="Selesai">Selesai</option><option value="Ditolak">Ditolak</option></select></div><button onclick="saveCaseHandler()" class="bg-teal-700 hover:bg-teal-600 text-white px-6 py-3 rounded-lg font-bold text-sm transition shadow-lg w-full md:w-auto self-end">UPDATE STATUS</button></div></div>
                                 </div>
@@ -365,8 +406,14 @@
 
         <div id="modalSuccess" class="fixed inset-0 bg-black/90 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
             <div class="bg-white rounded-2xl p-6 md:p-8 max-w-sm w-full text-center shadow-2xl">
-                <div class="text-5xl mb-4">☁️</div><h3 class="text-lg font-bold text-slate-900">Terkirim ke Cloud</h3><p class="text-slate-500 text-sm mb-6">Data aman di server. Simpan Tiket ID ini.</p>
-                <div id="ticketDisplay" class="bg-slate-100 border-2 border-slate-300 p-3 font-mono font-bold text-xl text-slate-800 rounded-xl select-all mb-6"></div>
+                <div class="text-5xl mb-4">☁️</div>
+                <h3 class="text-lg font-bold text-slate-900">Terkirim ke Cloud</h3>
+                <p class="text-slate-500 text-sm mb-6">Data aman di server. <strong class="text-red-600">Wajib simpan Tiket ID ini</strong> — tidak bisa dipulihkan!</p>
+                <div id="ticketDisplay" class="bg-slate-100 border-2 border-slate-300 p-3 font-mono font-bold text-xl text-slate-800 rounded-xl select-all mb-3"></div>
+                <button onclick="copyTicket()" id="btnCopyTicket" class="w-full mb-3 bg-teal-600 text-white py-3 rounded-xl font-bold hover:bg-teal-500 transition flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    SALIN TIKET
+                </button>
                 <button onclick="location.reload()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">TUTUP</button>
             </div>
         </div>
@@ -450,54 +497,203 @@
             const success = await window.sendChatMessage(currentAdminReportId, msg, 'admin'); if(success) input.value = '';
         }
 
+        // Enter key support for chat
+        document.getElementById('publicChatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPublicChat(); } });
+        document.getElementById('adminChatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminChat(); } });
+        document.getElementById('adminPass').addEventListener('keydown', e => { if (e.key === 'Enter') authAdmin(); });
+        document.getElementById('trackInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkStatusCloud(); });
+
+        // Copy ticket to clipboard
+        window.copyTicket = function() {
+            const token = document.getElementById('ticketDisplay').innerText;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(token).then(() => {
+                    const btn = document.getElementById('btnCopyTicket');
+                    btn.innerHTML = '✅ TERSALIN!';
+                    btn.classList.replace('bg-teal-600', 'bg-green-600');
+                    setTimeout(() => { btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg> SALIN TIKET'; btn.classList.replace('bg-green-600', 'bg-teal-600'); }, 2000);
+                });
+            } else {
+                // Fallback
+                const el = document.getElementById('ticketDisplay');
+                const range = document.createRange(); range.selectNode(el);
+                window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+                document.execCommand('copy');
+                alert('Tiket disalin: ' + token);
+            }
+        };
+
         function updateLegalInfo() { const c = document.getElementById('inKategori').value; const p = protocols[c]; if(p) { document.getElementById('legalEmpty').classList.add('hidden'); document.getElementById('legalContent').classList.remove('hidden'); document.getElementById('lPasalTitle').innerText = p.legal.title; document.getElementById('lPasalCode').innerText = p.legal.pasal_code; document.getElementById('lPasalDesc').innerText = p.legal.pasal_desc; document.getElementById('lPrison').innerText = p.legal.prison; document.getElementById('lFine').innerText = p.legal.fine; } }
         function loadGuideDetail(id) { const s = sopSteps.find(x => x.id === id); document.getElementById('guideEmpty').classList.add('hidden'); document.getElementById('guideDetail').classList.remove('hidden'); document.getElementById('gStep').innerText = `LANGKAH ${s.id}`; document.getElementById('gTitle').innerText = s.title; document.getElementById('gDesc').innerText = s.desc; document.getElementById('gStrat').innerText = s.strat; document.getElementById('gDos').innerHTML = s.dos.map(i=>`<li>${i}</li>`).join(''); document.getElementById('gDonts').innerHTML = s.donts.map(i=>`<li>${i}</li>`).join(''); if(window.innerWidth < 1024) document.getElementById('guideDetailCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         function loadAdminGuideDetail(id) { const s = adminSteps.find(x => x.id === id); document.getElementById('adminGuideEmpty').classList.add('hidden'); document.getElementById('adminGuideDetail').classList.remove('hidden'); document.getElementById('adStep').innerText = `TAHAP ${s.id}`; document.getElementById('adTitle').innerText = s.title; document.getElementById('adDesc').innerText = s.desc; document.getElementById('adIcon').innerText = s.icon; document.getElementById('adGoal').innerText = s.goal; document.getElementById('adRisk').innerText = s.risk; document.getElementById('adCheck').innerHTML = s.check.map(c => `<li class="px-6 py-4 flex items-start gap-3 text-sm text-slate-300 border-b border-slate-800 last:border-0"><span class="text-teal-500 mt-0.5">✔</span>${c}</li>`).join(''); }
         
         async function submitReportHandler(e) {
-            e.preventDefault(); const btn = document.getElementById('btnSubmitForm'); btn.innerHTML = "MENGIRIM..."; btn.disabled = true;
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitForm');
+            const kategori = document.getElementById('inKategori').value;
+            const terlapor = window.sanitize(document.getElementById('inTerlapor').value);
+            const waktu = document.getElementById('inWaktu').value;
+            const kronologi = window.sanitize(document.getElementById('inKronologi').value);
+            const driveLink = window.sanitize(document.getElementById('inDriveLink').value);
+            const buktiText = window.sanitize(document.getElementById('inBukti').value);
+
+            // Validate kronologi length
+            if (kronologi.length < 30) { alert("Kronologi terlalu singkat. Harap jelaskan minimal 30 karakter."); return; }
+            if (!terlapor) { alert("Nama terlapor wajib diisi."); return; }
+
+            btn.innerHTML = `<svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> MENGIRIM...`;
+            btn.disabled = true;
             const token = '#WBS-' + Math.floor(10000 + Math.random() * 90000);
-            const driveLink = document.getElementById('inDriveLink').value.trim();
-            const reportData = { token: token, kategori: document.getElementById('inKategori').value, terlapor: document.getElementById('inTerlapor').value, waktu: document.getElementById('inWaktu').value, kronologi: document.getElementById('inKronologi').value, buktiLink: driveLink, status: 'Menunggu', adminResponse: '', timestamp: new Date().toLocaleDateString('id-ID'), createdAt: Date.now() };
+            const reportData = {
+                token, kategori, terlapor, waktu, kronologi,
+                buktiLink: driveLink, buktiText,
+                status: 'Menunggu', adminResponse: '',
+                timestamp: new Date().toLocaleDateString('id-ID'), createdAt: Date.now()
+            };
             const success = await window.sendReportToCloud(reportData);
-            if (success) { document.getElementById('ticketDisplay').innerText = token; document.getElementById('modalSuccess').classList.remove('hidden'); document.forms[0].reset(); }
-            btn.innerHTML = "KIRIM LAPORAN"; btn.disabled = false;
+            if (success) {
+                document.getElementById('ticketDisplay').innerText = token;
+                window._lastToken = token;
+                document.getElementById('modalSuccess').classList.remove('hidden');
+                document.forms[0].reset();
+                document.getElementById('charCount').innerText = '0';
+            }
+            btn.innerHTML = "KIRIM LAPORAN";
+            btn.disabled = false;
         }
 
         async function checkStatusCloud() {
-            const t = document.getElementById('trackInput').value.trim();
+            const t = document.getElementById('trackInput').value.trim().toUpperCase();
             if(!window.globalReports) { alert("Data belum sinkron."); return; }
-            const r = window.globalReports.find(x => x.token === t); const res = document.getElementById('trackResult');
-            if (r) { 
-                res.classList.remove('hidden'); document.getElementById('tBadge').innerText = r.status; document.getElementById('tMsg').innerText = r.status === 'Investigasi' ? 'Investigasi Berjalan' : 'Laporan diterima.'; 
-                document.getElementById('tBadge').className = `px-3 py-1 rounded-full text-xs font-bold ${r.status === 'Investigasi' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`; 
-                currentReportToken = r.id; window.loadChatRoom(r.id, 'publicChatBox');
-            } else { alert("Tiket tidak ditemukan."); res.classList.add('hidden'); }
+            const r = window.globalReports.find(x => x.token === t);
+            const res = document.getElementById('trackResult');
+            if (r) {
+                res.classList.remove('hidden');
+                const statusColors = {
+                    'Menunggu': 'bg-yellow-100 text-yellow-800',
+                    'Investigasi': 'bg-orange-100 text-orange-700',
+                    'Selesai': 'bg-green-100 text-green-700',
+                    'Ditolak': 'bg-red-100 text-red-700'
+                };
+                document.getElementById('tBadge').innerText = r.status;
+                document.getElementById('tBadge').className = `px-3 py-1 rounded-full text-xs font-bold ${statusColors[r.status] || 'bg-slate-100 text-slate-700'}`;
+                const statusMsg = { 'Menunggu': 'Laporan Anda sudah diterima dan sedang antre verifikasi.', 'Investigasi': 'Tim pengawas sedang menginvestigasi kasus ini.', 'Selesai': 'Kasus telah selesai diproses.', 'Ditolak': 'Laporan tidak memenuhi syarat untuk ditindaklanjuti.' };
+                document.getElementById('tMsg').innerText = statusMsg[r.status] || 'Status tidak diketahui.';
+                // Show Drive link if available
+                const driveLinkEl = document.getElementById('tDriveLink');
+                if (r.buktiLink) {
+                    driveLinkEl.classList.remove('hidden');
+                    document.getElementById('tDriveLinkAnchor').href = r.buktiLink;
+                } else {
+                    driveLinkEl.classList.add('hidden');
+                }
+                currentReportToken = r.id;
+                window.loadChatRoom(r.id, 'publicChatBox');
+            } else {
+                alert("Tiket tidak ditemukan. Pastikan format: #WBS-XXXXX");
+                res.classList.add('hidden');
+            }
         }
 
         let currentCaseId = null;
-        async function saveCaseHandler() { if (!currentCaseId) return; const success = await window.updateReportInCloud(currentCaseId, { status: document.getElementById('dActionStatus').value, adminResponse: "" }); if (success) alert("Update berhasil."); }
+        async function saveCaseHandler() {
+            if (!currentCaseId) return;
+            const newStatus = document.getElementById('dActionStatus').value;
+            const currentCase = window.globalReports.find(r => r.id === currentCaseId);
+            if (!currentCase) return;
+            // Confirmation
+            const confirmed = confirm(`Konfirmasi ubah status "${currentCase.token}" menjadi "${newStatus}"?`);
+            if (!confirmed) return;
+            const success = await window.updateReportInCloud(currentCaseId, { status: newStatus, adminResponse: "" });
+            if (success) {
+                // Update badge live
+                document.getElementById('dStatusBadge').innerText = newStatus;
+                const badgeColors = { 'Investigasi': 'bg-orange-900 text-orange-200', 'Selesai': 'bg-green-900 text-green-200', 'Ditolak': 'bg-red-900 text-red-200', 'Menunggu': 'bg-slate-700 text-slate-300' };
+                document.getElementById('dStatusBadge').className = `px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${badgeColors[newStatus] || 'bg-slate-700 text-slate-300'}`;
+                showToast('✅ Status berhasil diperbarui');
+            }
+        }
+
+        // Toast notification helper
+        function showToast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = `fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-xl text-sm font-bold text-white shadow-2xl transition-all duration-300 ${type === 'success' ? 'bg-teal-600' : 'bg-red-600'}`;
+            t.innerText = msg;
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        // Export to CSV
+        window.exportReports = function() {
+            if (!window.globalReports || window.globalReports.length === 0) { alert("Tidak ada data."); return; }
+            const headers = ['Token', 'Tanggal', 'Kategori', 'Terlapor', 'Status', 'Kronologi'];
+            const rows = window.globalReports.map(r => [
+                r.token, r.timestamp, r.kategori, r.terlapor, r.status,
+                '"' + (r.kronologi || '').replace(/"/g, '""').replace(/\n/g, ' ') + '"'
+            ]);
+            const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `WBS_Export_${new Date().toLocaleDateString('id-ID').replace(/\//g,'-')}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+            showToast('📥 Export berhasil');
+        };
 
         window.renderAdminList = function() {
-            const l = document.getElementById('reportList'); l.innerHTML = ''; const s = [...window.globalReports].sort((a, b) => b.createdAt - a.createdAt);
-            if (s.length === 0) document.getElementById('emptyAdmin').classList.remove('hidden'); else { document.getElementById('emptyAdmin').classList.add('hidden'); s.forEach(r => { const d = document.createElement('div'); d.className = "p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800 transition"; d.onclick = () => openCase(r); d.innerHTML = `<div class="flex justify-between mb-1"><span class="text-[10px] font-mono text-slate-500">${r.token}</span><span class="text-[10px] font-bold ${r.status === 'Menunggu' ? 'text-yellow-500' : 'text-teal-500'}">${r.status}</span></div><div class="text-sm text-white font-bold truncate">${r.kategori}</div><div class="text-[10px] text-slate-500 truncate">${r.timestamp}</div>`; l.appendChild(d); }); }
-        }
+            const l = document.getElementById('reportList');
+            l.innerHTML = '';
+            const s = [...window.globalReports].sort((a, b) => b.createdAt - a.createdAt);
+            // Update counters
+            const total = s.length;
+            const pending = s.filter(r => r.status === 'Menunggu').length;
+            const active = s.filter(r => r.status === 'Investigasi').length;
+            const done = s.filter(r => r.status === 'Selesai' || r.status === 'Ditolak').length;
+            document.getElementById('cntTotal').innerText = total;
+            document.getElementById('cntPending').innerText = pending;
+            document.getElementById('cntActive').innerText = active;
+            document.getElementById('cntDone').innerText = done;
+            if (s.length === 0) {
+                document.getElementById('emptyAdmin').classList.remove('hidden');
+            } else {
+                document.getElementById('emptyAdmin').classList.add('hidden');
+                s.forEach(r => {
+                    const d = document.createElement('div');
+                    d.className = "p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800 transition";
+                    d.onclick = () => openCase(r);
+                    const statusColors = { 'Menunggu': 'text-yellow-400', 'Investigasi': 'text-orange-400', 'Selesai': 'text-green-400', 'Ditolak': 'text-red-400' };
+                    d.innerHTML = `<div class="flex justify-between mb-1"><span class="text-[10px] font-mono text-slate-500">${r.token}</span><span class="text-[10px] font-bold ${statusColors[r.status] || 'text-teal-500'}">${r.status}</span></div><div class="text-sm text-white font-bold truncate">${r.kategori}</div><div class="text-[10px] text-slate-500 truncate">${r.timestamp}</div>`;
+                    l.appendChild(d);
+                });
+            }
+        };
 
         function openCase(r) {
             currentCaseId = r.id; currentAdminReportId = r.id;
-            document.getElementById('adminMasterList').classList.add('hidden', 'lg:block'); document.getElementById('adminDetailPanel').classList.remove('translate-x-full'); document.getElementById('workspaceEmpty').classList.add('hidden'); document.getElementById('workspaceDetail').classList.remove('hidden');
-            document.getElementById('dTicket').innerText = r.token; document.getElementById('dDate').innerText = r.timestamp; document.getElementById('dCat').innerText = r.kategori; document.getElementById('dSuspect').innerText = r.terlapor; document.getElementById('dStatusBadge').innerText = r.status; document.getElementById('dStatusBadge').className = `px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${r.status === 'Investigasi' ? 'bg-orange-900 text-orange-200' : 'bg-slate-700 text-slate-300'}`;
-            document.getElementById('dKron').innerText = r.kronologi; document.getElementById('dBukti').innerText = r.buktiText || "-"; document.getElementById('dActionStatus').value = r.status; 
-            
-            const attDiv = document.getElementById('dAttachment');
-            // FIX: Using direct attachment logic again
-            if(r.attachment) { 
-                attDiv.classList.remove('hidden'); 
-                document.getElementById('dAttachmentName').innerText = r.attachmentName || "Lampiran"; 
-            } else { 
-                attDiv.classList.add('hidden'); 
+            document.getElementById('adminMasterList').classList.add('hidden', 'lg:block');
+            document.getElementById('adminDetailPanel').classList.remove('translate-x-full');
+            document.getElementById('workspaceEmpty').classList.add('hidden');
+            document.getElementById('workspaceDetail').classList.remove('hidden');
+            document.getElementById('dTicket').innerText = r.token;
+            document.getElementById('dDate').innerText = r.timestamp;
+            document.getElementById('dCat').innerText = r.kategori;
+            document.getElementById('dSuspect').innerText = r.terlapor;
+            document.getElementById('dStatusBadge').innerText = r.status;
+            const badgeColors = { 'Investigasi': 'bg-orange-900 text-orange-200', 'Selesai': 'bg-green-900 text-green-200', 'Ditolak': 'bg-red-900 text-red-200', 'Menunggu': 'bg-slate-700 text-slate-300' };
+            document.getElementById('dStatusBadge').className = `px-3 py-1 rounded text-xs font-bold uppercase tracking-wide shadow-lg shrink-0 ${badgeColors[r.status] || 'bg-slate-700 text-slate-300'}`;
+            document.getElementById('dKron').innerText = r.kronologi;
+            document.getElementById('dBukti').innerText = r.buktiText || "-";
+            document.getElementById('dActionStatus').value = r.status;
+            // Drive link
+            const driveLinkAdmin = document.getElementById('dDriveLink');
+            if (r.buktiLink) {
+                driveLinkAdmin.classList.remove('hidden');
+                document.getElementById('dDriveLinkAnchor').href = r.buktiLink;
+            } else {
+                driveLinkAdmin.classList.add('hidden');
             }
-            
+            const attDiv = document.getElementById('dAttachment');
+            attDiv.classList.add('hidden');
             window.loadChatRoom(r.id, 'adminChatBox');
         }
 
